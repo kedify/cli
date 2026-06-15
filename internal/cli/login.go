@@ -1,16 +1,14 @@
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
-	"syscall"
-	"unsafe"
 
 	"github.com/kedify/cli/internal/config"
+	"golang.org/x/term"
 )
 
 const apiKeysURL = "https://dashboard.dev.kedify.io/api-keys"
@@ -37,18 +35,12 @@ func readToken(stdin *os.File, stderr io.Writer) (string, error) {
 			return "", fmt.Errorf("write prompt: %w", err)
 		}
 
-		restore, err := disableTerminalEcho(stdin)
+		line, err := term.ReadPassword(int(stdin.Fd()))
 		if err != nil {
-			return "", fmt.Errorf("disable terminal echo: %w", err)
-		}
-		defer restore()
-
-		line, err := bufio.NewReader(stdin).ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
 			return "", fmt.Errorf("read token from terminal: %w", err)
 		}
 
-		token := strings.TrimSpace(line)
+		token := strings.TrimSpace(string(line))
 		if token == "" {
 			return "", errors.New("no token provided")
 		}
@@ -80,44 +72,4 @@ func isInteractiveInput(stdin *os.File) bool {
 	}
 
 	return info.Mode()&os.ModeCharDevice != 0
-}
-
-func disableTerminalEcho(file *os.File) (func(), error) {
-	fd := file.Fd()
-
-	termios, err := getTermios(fd)
-	if err != nil {
-		return nil, err
-	}
-
-	original := *termios
-	updated := *termios
-	updated.Lflag &^= syscall.ECHO
-
-	if err := setTermios(fd, &updated); err != nil {
-		return nil, err
-	}
-
-	return func() {
-		_ = setTermios(fd, &original)
-	}, nil
-}
-
-func getTermios(fd uintptr) (*syscall.Termios, error) {
-	termios := &syscall.Termios{}
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(termios)))
-	if errno != 0 {
-		return nil, errno
-	}
-
-	return termios, nil
-}
-
-func setTermios(fd uintptr, termios *syscall.Termios) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(syscall.TCSETS), uintptr(unsafe.Pointer(termios)))
-	if errno != 0 {
-		return errno
-	}
-
-	return nil
 }
