@@ -1,0 +1,21 @@
+# Build outputs
+/bin/
+/cli
+/kedify
+
+# Go
+*.test
+*.out
+coverage.out
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+
+# Codex
+.codex
