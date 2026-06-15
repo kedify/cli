@@ -1,3 +1,4 @@
+// Package api contains Kedify API client helpers used by the CLI.
 package api
 
 import (
@@ -13,11 +14,13 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// ClustersResponse represents one paginated response page from the clusters API.
 type ClustersResponse struct {
 	Items    []map[string]any `json:"items"`
 	PageInfo PageInfo         `json:"pageInfo"`
 }
 
+// PageInfo describes pagination details returned by the Kedify API.
 type PageInfo struct {
 	HasNext    bool `json:"hasNext"`
 	HasPrev    bool `json:"hasPrev"`
@@ -27,10 +30,12 @@ type PageInfo struct {
 	TotalPages int  `json:"totalPages"`
 }
 
+// NewClient creates a Kedify API client backed by the provided HTTP client.
 func NewClient(httpClient *http.Client) *Client {
 	return &Client{httpClient: httpClient}
 }
 
+// ListClusters fetches all pages from the clusters API and returns the aggregated items.
 func (c *Client) ListClusters(apiURL, token string) ([]map[string]any, error) {
 	var allItems []map[string]any
 	page := 1

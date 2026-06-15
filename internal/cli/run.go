@@ -1,3 +1,4 @@
+// Package cli wires the Kedify command tree and its runtime dependencies.
 package cli
 
 import (
@@ -17,6 +18,7 @@ type Root struct {
 	List   ListCmd  `cmd:"" help:"List Kedify resources."`
 }
 
+// Context carries shared runtime dependencies for CLI commands.
 type Context struct {
 	APIURL string
 	Stdout *os.File
@@ -25,6 +27,7 @@ type Context struct {
 	Client *api.Client
 }
 
+// Run parses CLI arguments, executes the selected command, and returns a process exit code.
 func Run() int {
 	var root Root
 	parser := kong.Parse(

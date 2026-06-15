@@ -1,3 +1,4 @@
+// Package main provides the kedify CLI executable entrypoint.
 package main
 
 import (

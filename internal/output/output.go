@@ -1,3 +1,4 @@
+// Package output formats CLI results for terminal output.
 package output
 
 import (
@@ -9,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Write serializes a value to the requested output format and writes it to w.
 func Write(w io.Writer, value any, format string) error {
 	var (
 		data []byte

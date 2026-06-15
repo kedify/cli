@@ -13,8 +13,10 @@ import (
 
 const apiKeysURL = "https://dashboard.dev.kedify.io/api-keys"
 
+// LoginCmd stores a Kedify API token in the local user configuration.
 type LoginCmd struct{}
 
+// Run executes the login command.
 func (c *LoginCmd) Run(app *Context) error {
 	token, err := readToken(app.Stdin, app.Stderr)
 	if err != nil {

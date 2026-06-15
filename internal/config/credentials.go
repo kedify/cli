@@ -1,3 +1,4 @@
+// Package config manages local Kedify CLI configuration stored on disk.
 package config
 
 import (
@@ -20,6 +21,7 @@ type Credentials struct {
 	Token string `json:"token"`
 }
 
+// WriteCredentials writes credentials to the user's Kedify config directory.
 func WriteCredentials(creds Credentials) error {
 	path, err := credentialsPath()
 	if err != nil {
@@ -43,6 +45,7 @@ func WriteCredentials(creds Credentials) error {
 	return nil
 }
 
+// ReadCredentials loads credentials from the user's Kedify config directory.
 func ReadCredentials() (Credentials, error) {
 	path, err := credentialsPath()
 	if err != nil {
