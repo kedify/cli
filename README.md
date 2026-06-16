@@ -12,8 +12,10 @@ This repository contains an experimental `kedify` CLI built with `bubbletea` and
   You can also provide a token via `stdin`.
 - `kedify list clusters`
   Calls the Kedify API and transparently reads all pages before printing the final cluster list.
+- `kedify get cluster [name]`
+  Prints one cluster by name or id, and shows an interactive picker when no name is provided.
 - Output formatting
-  `kedify list clusters` supports `-o` and `--output` with `json` or `yaml`.
+  `kedify list clusters` and `kedify get cluster` support `-o` and `--output` with `json` or `yaml`.
 
 ## Build
 
@@ -67,6 +69,18 @@ List clusters as YAML:
 
 ```bash
 ./bin/kedify list clusters -o yaml
+```
+
+Get a cluster by name:
+
+```bash
+./bin/kedify get cluster my-cluster
+```
+
+Pick a cluster interactively:
+
+```bash
+./bin/kedify get cluster
 ```
 
 Override the API URL:

@@ -63,6 +63,8 @@ func run(ctx *context, args []string) error {
 	case "help", "--help", "-h":
 		writeRootHelp(ctx.stdout)
 		return nil
+	case "get":
+		return runGet(ctx, remaining[1:])
 	case "login":
 		return runLogin(ctx, remaining[1:])
 	case "list":
@@ -123,6 +125,23 @@ func runList(ctx *context, args []string) error {
 	}
 }
 
+func runGet(ctx *context, args []string) error {
+	if len(args) == 0 {
+		writeGetHelp(ctx.stdout)
+		return nil
+	}
+
+	switch args[0] {
+	case "cluster":
+		return runGetCluster(ctx, args[1:])
+	case "help", "--help", "-h":
+		writeGetHelp(ctx.stdout)
+		return nil
+	default:
+		return fmt.Errorf("unknown get subcommand %q", args[0])
+	}
+}
+
 func runListClusters(ctx *context, args []string) error {
 	flags := flag.NewFlagSet("clusters", flag.ContinueOnError)
 	flags.SetOutput(ctx.stderr)
@@ -167,8 +186,17 @@ Flags:
       --apiurl string    Base URL for the Kedify API (default "https://api.dev.kedify.io/v1")
 
 Commands:
+  get cluster           Get a cluster.
   login                  Read an auth token from stdin and store it locally.
   list clusters          List clusters.
+`)
+}
+
+func writeGetHelp(w io.Writer) {
+	_, _ = fmt.Fprint(w, `Usage: kedify get <command>
+
+Commands:
+  cluster                Get a cluster.
 `)
 }
 
