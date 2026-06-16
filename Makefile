@@ -7,7 +7,7 @@ build:
 	GOCACHE=/tmp/go-build CGO_ENABLED=0 go build -o $(BIN) ./cmd/kedify
 
 fmt:
-	gofmt -w .
+	gofmt -w $(shell go list -f '{{.Dir}}' ./...)
 
 vet:
 	go vet ./...
