@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true)
-	metaStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	clusterPickerTitleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
+	clusterPickerHintStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	clusterPickerSelectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true)
+	clusterPickerMetaStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 )
 
 type clusterOption struct {
@@ -103,9 +105,9 @@ func (m clusterPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m clusterPickerModel) View() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Select a Cluster"))
+	b.WriteString(clusterPickerTitleStyle.Render("Select a Cluster"))
 	b.WriteString("\n")
-	b.WriteString(hintStyle.Render("Use ↑/↓ or j/k, Enter to select, Esc to cancel."))
+	b.WriteString(clusterPickerHintStyle.Render("Use ↑/↓ or j/k, Enter to select, Esc to cancel."))
 	b.WriteString("\n\n")
 
 	for i, option := range m.options {
@@ -113,7 +115,7 @@ func (m clusterPickerModel) View() string {
 		lineStyle := lipgloss.NewStyle()
 		if i == m.cursor {
 			prefix = "› "
-			lineStyle = selectedStyle
+			lineStyle = clusterPickerSelectedStyle
 		}
 
 		b.WriteString(lineStyle.Render(prefix + option.Name))
@@ -126,7 +128,7 @@ func (m clusterPickerModel) View() string {
 				metaParts = append(metaParts, option.ID)
 			}
 			b.WriteString("\n")
-			b.WriteString(metaStyle.Render("  " + strings.Join(metaParts, " • ")))
+			b.WriteString(clusterPickerMetaStyle.Render("  " + strings.Join(metaParts, " • ")))
 		}
 		b.WriteString("\n")
 	}
