@@ -30,9 +30,11 @@ func (f *fakeCredentialsStore) WriteCredentials(creds credentials) error {
 
 type fakeClusterService struct {
 	clusters  []map[string]any
+	cluster   map[string]any
 	err       error
 	lastURL   string
 	lastToken string
+	lastID    string
 }
 
 func (f *fakeClusterService) ListClusters(apiURL, token string) ([]map[string]any, error) {
@@ -42,6 +44,16 @@ func (f *fakeClusterService) ListClusters(apiURL, token string) ([]map[string]an
 		return nil, f.err
 	}
 	return f.clusters, nil
+}
+
+func (f *fakeClusterService) GetCluster(apiURL, token, clusterID string) (map[string]any, error) {
+	f.lastURL = apiURL
+	f.lastToken = token
+	f.lastID = clusterID
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.cluster, nil
 }
 
 func TestLoginCmdRunStoresCredentials(t *testing.T) {
@@ -172,12 +184,56 @@ func TestGetClusterCmdRunFindsNamedCluster(t *testing.T) {
 	}
 }
 
+func TestGetClusterCmdRunUsesDedicatedEndpointForUUID(t *testing.T) {
+	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
+	service := &fakeClusterService{
+		cluster: map[string]any{
+			"id":   "fc6af0dc-685b-4055-805d-0d3e0ead1596",
+			"name": "alpha",
+		},
+	}
+
+	var gotValue any
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      &bytes.Buffer{},
+		stderr:      &bytes.Buffer{},
+		apiURL:      "https://api.dev.kedify.io/v1",
+		token:       "override-token",
+		client:      service,
+		credentials: store,
+		selectCluster: func(_ io.Reader, _ io.Writer, _ []map[string]any) (map[string]any, error) {
+			t.Fatal("selector should not be called when uuid is provided")
+			return nil, nil
+		},
+		writeOutput: func(_ io.Writer, value any, _ string) error {
+			gotValue = value
+			return nil
+		},
+	}
+
+	id := "fc6af0dc-685b-4055-805d-0d3e0ead1596"
+	cmd := &GetClusterCmd{Name: id, Output: "json"}
+	if err := cmd.Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	cluster, ok := gotValue.(map[string]any)
+	if !ok || cluster["id"] != id {
+		t.Fatalf("got output value = %#v", gotValue)
+	}
+	if service.lastID != id {
+		t.Fatalf("service lastID = %q, want %q", service.lastID, id)
+	}
+}
+
 func TestGetClusterCmdRunUsesSelectorWhenNameMissing(t *testing.T) {
 	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
 	service := &fakeClusterService{
-		clusters: []map[string]any{{"id": "1", "name": "alpha"}},
+		clusters: []map[string]any{{"id": "fc6af0dc-685b-4055-805d-0d3e0ead1596", "name": "alpha"}},
+		cluster:  map[string]any{"id": "fc6af0dc-685b-4055-805d-0d3e0ead1596", "name": "alpha", "agentStatus": "connected"},
 	}
-	selected := map[string]any{"id": "1", "name": "alpha"}
+	selected := map[string]any{"id": "fc6af0dc-685b-4055-805d-0d3e0ead1596", "name": "alpha"}
 
 	var gotValue any
 	ctx := &context{
@@ -213,6 +269,9 @@ func TestGetClusterCmdRunUsesSelectorWhenNameMissing(t *testing.T) {
 	}
 	if service.lastToken != "override-token" {
 		t.Fatalf("service token = %q, want %q", service.lastToken, "override-token")
+	}
+	if service.lastID != "fc6af0dc-685b-4055-805d-0d3e0ead1596" {
+		t.Fatalf("service lastID = %q", service.lastID)
 	}
 }
 

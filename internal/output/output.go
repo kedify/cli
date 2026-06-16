@@ -56,11 +56,12 @@ func renderClusterListText(clusters []map[string]any) []byte {
 	}
 
 	rows := make([][]string, 0, len(clusters)+1)
-	rows = append(rows, []string{"NAME", "AGENT VERSION", "KEDA VERSION", "AGENT STATUS", "KEDA STATUS", "AGE"})
+	rows = append(rows, []string{"NAME", "ID", "AGENT VERSION", "KEDA VERSION", "AGENT STATUS", "KEDA STATUS", "AGE"})
 
 	for _, cluster := range clusters {
 		rows = append(rows, []string{
 			fallbackClusterValue(cluster, "name", "<unnamed cluster>"),
+			clusterTextValue(cluster, "id"),
 			clusterAgentVersion(cluster),
 			clusterKEDAVersion(cluster),
 			clusterTextValue(cluster, "agentStatus"),

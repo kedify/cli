@@ -36,6 +36,7 @@ type credentialsStore interface {
 
 type clusterService interface {
 	ListClusters(apiURL, token string) ([]map[string]any, error)
+	GetCluster(apiURL, token, clusterID string) (map[string]any, error)
 }
 
 type credentials struct {

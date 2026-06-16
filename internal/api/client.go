@@ -56,6 +56,40 @@ func (c *Client) ListClusters(apiURL, token string) ([]map[string]any, error) {
 	return allItems, nil
 }
 
+func (c *Client) GetCluster(apiURL, token, clusterID string) (map[string]any, error) {
+	requestURL := strings.TrimRight(apiURL, "/") + "/clusters/" + url.PathEscape(clusterID)
+
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request cluster %s: %w", clusterID, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("parse response as json: %w", err)
+	}
+
+	return payload, nil
+}
+
 func (c *Client) listClustersPage(apiURL, token string, page int) (clustersResponse, error) {
 	requestURL, err := url.Parse(strings.TrimRight(apiURL, "/") + "/clusters")
 	if err != nil {

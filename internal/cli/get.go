@@ -2,7 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"regexp"
 )
+
+var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type GetClusterCmd struct {
 	Name   string `arg:"" optional:"" name:"name" help:"Cluster name or id."`
@@ -22,14 +25,28 @@ func (c *GetClusterCmd) Run(ctx *context) error {
 
 	var cluster map[string]any
 	if c.Name != "" {
-		cluster, err = findCluster(clusters, c.Name)
+		if isUUID(c.Name) {
+			cluster, err = ctx.client.GetCluster(ctx.apiURL, token, c.Name)
+			if err != nil {
+				return err
+			}
+		} else {
+			cluster, err = findCluster(clusters, c.Name)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		selectedCluster, err := ctx.selectCluster(ctx.stdin, ctx.stdout, clusters)
 		if err != nil {
 			return err
 		}
-	} else {
-		cluster, err = ctx.selectCluster(ctx.stdin, ctx.stdout, clusters)
-		if err != nil {
-			return err
+		cluster = selectedCluster
+		if id := clusterString(selectedCluster, "id"); isUUID(id) {
+			cluster, err = ctx.client.GetCluster(ctx.apiURL, token, id)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -44,6 +61,10 @@ func findCluster(clusters []map[string]any, query string) (map[string]any, error
 	}
 
 	return nil, fmt.Errorf("cluster %q not found", query)
+}
+
+func isUUID(value string) bool {
+	return uuidPattern.MatchString(value)
 }
 
 func clusterString(cluster map[string]any, key string) string {

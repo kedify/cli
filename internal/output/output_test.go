@@ -11,6 +11,7 @@ func TestWriteTextClusterList(t *testing.T) {
 	value := []map[string]any{
 		{
 			"name":        "alpha",
+			"id":          "1",
 			"agentStatus": "connected",
 			"kedaStatus":  "ready",
 			"createdAt":   "2026-06-15",
@@ -30,12 +31,14 @@ func TestWriteTextClusterList(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"NAME",
+		"ID",
 		"AGENT VERSION",
 		"KEDA VERSION",
 		"AGENT STATUS",
 		"KEDA STATUS",
 		"AGE",
 		"alpha",
+		"1",
 		"v0.6.1",
 		"v2.18.0",
 		"connected",
@@ -48,7 +51,7 @@ func TestWriteTextClusterList(t *testing.T) {
 	if strings.Contains(got, "---") {
 		t.Fatalf("unexpected divider line in output: %q", got)
 	}
-	if !strings.Contains(got, "NAME   AGENT VERSION  KEDA VERSION  AGENT STATUS  KEDA STATUS  AGE") {
+	if !strings.Contains(got, "NAME   ID  AGENT VERSION  KEDA VERSION  AGENT STATUS  KEDA STATUS  AGE") {
 		t.Fatalf("unexpected text output: %q", got)
 	}
 }

@@ -64,3 +64,27 @@ func TestListClustersReturnsHTTPError(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestGetClusterCallsDedicatedEndpoint(t *testing.T) {
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`{"id":"fc6af0dc-685b-4055-805d-0d3e0ead1596","name":"alpha"}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}}
+
+	cluster, err := client.GetCluster("https://api.dev.kedify.io/v1", "token", "fc6af0dc-685b-4055-805d-0d3e0ead1596")
+	if err != nil {
+		t.Fatalf("GetCluster() error = %v", err)
+	}
+
+	if cluster["name"] != "alpha" {
+		t.Fatalf("cluster = %#v", cluster)
+	}
+}
