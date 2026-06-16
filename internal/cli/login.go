@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 )
 
 type LoginCmd struct {
@@ -9,9 +10,9 @@ type LoginCmd struct {
 }
 
 func (c *LoginCmd) Run(ctx *context) error {
-	token := c.Token
+	token := strings.TrimSpace(c.Token)
 	if token == "" {
-		token = ctx.token
+		token = strings.TrimSpace(ctx.token)
 	}
 	if token == "" {
 		var err error

@@ -35,3 +35,20 @@ func TestLoginModelAcceptsTypedToken(t *testing.T) {
 		t.Fatalf("token = %q, want %q", got.token, "abc")
 	}
 }
+
+func TestPromptOutputPrefersStderr(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	if got := promptOutput(stdout, stderr); got != stderr {
+		t.Fatal("promptOutput() did not prefer stderr")
+	}
+}
+
+func TestPromptOutputFallsBackToStdout(t *testing.T) {
+	stdout := &bytes.Buffer{}
+
+	if got := promptOutput(stdout, nil); got != stdout {
+		t.Fatal("promptOutput() did not fall back to stdout")
+	}
+}

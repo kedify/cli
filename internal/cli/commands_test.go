@@ -99,6 +99,51 @@ func TestLoginCmdRunUsesExplicitToken(t *testing.T) {
 	}
 }
 
+func TestLoginCmdRunIgnoresWhitespaceExplicitToken(t *testing.T) {
+	store := &fakeCredentialsStore{}
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      &bytes.Buffer{},
+		stderr:      &bytes.Buffer{},
+		token:       "env-token",
+		credentials: store,
+		readSecret: func(_ io.Reader, _ io.Writer, _ io.Writer) (string, error) {
+			t.Fatal("readSecret should not be called when trimmed context token is available")
+			return "", nil
+		},
+	}
+
+	if err := (&LoginCmd{Token: "   "}).Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if store.wrote.Token != "env-token" {
+		t.Fatalf("stored token = %q, want %q", store.wrote.Token, "env-token")
+	}
+}
+
+func TestLoginCmdRunIgnoresWhitespaceContextToken(t *testing.T) {
+	store := &fakeCredentialsStore{}
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      &bytes.Buffer{},
+		stderr:      &bytes.Buffer{},
+		token:       "   ",
+		credentials: store,
+		readSecret: func(_ io.Reader, _ io.Writer, _ io.Writer) (string, error) {
+			return "secret-token", nil
+		},
+	}
+
+	if err := (&LoginCmd{}).Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if store.wrote.Token != "secret-token" {
+		t.Fatalf("stored token = %q, want %q", store.wrote.Token, "secret-token")
+	}
+}
+
 func TestListClustersCmdRunWritesClusters(t *testing.T) {
 	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
 	service := &fakeClusterService{
@@ -157,7 +202,7 @@ func TestGetClusterCmdRunFindsNamedCluster(t *testing.T) {
 		token:       "override-token",
 		client:      service,
 		credentials: store,
-		selectCluster: func(_ io.Reader, _ io.Writer, _ []map[string]any) (map[string]any, error) {
+		selectCluster: func(_ io.Reader, _ io.Writer, _ io.Writer, _ []map[string]any) (map[string]any, error) {
 			t.Fatal("selector should not be called when name is provided")
 			return nil, nil
 		},
@@ -202,7 +247,7 @@ func TestGetClusterCmdRunUsesDedicatedEndpointForUUID(t *testing.T) {
 		token:       "override-token",
 		client:      service,
 		credentials: store,
-		selectCluster: func(_ io.Reader, _ io.Writer, _ []map[string]any) (map[string]any, error) {
+		selectCluster: func(_ io.Reader, _ io.Writer, _ io.Writer, _ []map[string]any) (map[string]any, error) {
 			t.Fatal("selector should not be called when uuid is provided")
 			return nil, nil
 		},
@@ -244,7 +289,7 @@ func TestGetClusterCmdRunUsesSelectorWhenNameMissing(t *testing.T) {
 		token:       "override-token",
 		client:      service,
 		credentials: store,
-		selectCluster: func(_ io.Reader, _ io.Writer, clusters []map[string]any) (map[string]any, error) {
+		selectCluster: func(_ io.Reader, _ io.Writer, _ io.Writer, clusters []map[string]any) (map[string]any, error) {
 			if len(clusters) != 1 {
 				t.Fatalf("selector clusters len = %d, want 1", len(clusters))
 			}

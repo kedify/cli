@@ -30,7 +30,7 @@ type clusterPickerModel struct {
 	quit    bool
 }
 
-func SelectClusterOrFail(stdin io.Reader, stdout io.Writer, clusters []map[string]any) (map[string]any, error) {
+func SelectClusterOrFail(stdin io.Reader, stdout io.Writer, stderr io.Writer, clusters []map[string]any) (map[string]any, error) {
 	file, ok := stdin.(*os.File)
 	if !ok || !isInteractive(file) {
 		return nil, errors.New("cluster name is required when not running interactively")
@@ -51,7 +51,7 @@ func SelectClusterOrFail(stdin io.Reader, stdout io.Writer, clusters []map[strin
 	}
 
 	model := clusterPickerModel{options: options}
-	program := tea.NewProgram(model, tea.WithInput(file), tea.WithOutput(stdout))
+	program := tea.NewProgram(model, tea.WithInput(file), tea.WithOutput(promptOutput(stdout, stderr)))
 	result, err := program.Run()
 	if err != nil {
 		return nil, fmt.Errorf("run cluster picker: %w", err)

@@ -37,7 +37,7 @@ func (c *GetClusterCmd) Run(ctx *context) error {
 			}
 		}
 	} else {
-		selectedCluster, err := ctx.selectCluster(ctx.stdin, ctx.stdout, clusters)
+		selectedCluster, err := ctx.selectCluster(ctx.stdin, ctx.stdout, ctx.stderr, clusters)
 		if err != nil {
 			return err
 		}

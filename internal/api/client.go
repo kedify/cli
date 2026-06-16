@@ -71,11 +71,10 @@ func (c *Client) GetCluster(apiURL, token, clusterID string) (map[string]any, er
 	if err != nil {
 		return nil, fmt.Errorf("request cluster %s: %w", clusterID, err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -114,11 +113,10 @@ func (c *Client) listClustersPage(apiURL, token string, page int) (clustersRespo
 	if err != nil {
 		return clustersResponse{}, fmt.Errorf("request clusters page %d: %w", page, err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp)
 	if err != nil {
-		return clustersResponse{}, fmt.Errorf("read response: %w", err)
+		return clustersResponse{}, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -131,4 +129,18 @@ func (c *Client) listClustersPage(apiURL, token string, page int) (clustersRespo
 	}
 
 	return payload, nil
+}
+
+func readResponseBody(resp *http.Response) ([]byte, error) {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if err := resp.Body.Close(); err != nil {
+		return nil, fmt.Errorf("close response body: %w", err)
+	}
+
+	return body, nil
 }

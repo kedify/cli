@@ -27,10 +27,10 @@ type loginModel struct {
 	quit  bool
 }
 
-func ReadSecretOrPipe(stdin io.Reader, stdout io.Writer, _ io.Writer) (string, error) {
+func ReadSecretOrPipe(stdin io.Reader, stdout io.Writer, stderr io.Writer) (string, error) {
 	if file, ok := stdin.(*os.File); ok && isInteractive(file) {
 		model := loginModel{}
-		program := tea.NewProgram(model, tea.WithInput(file), tea.WithOutput(stdout))
+		program := tea.NewProgram(model, tea.WithInput(file), tea.WithOutput(promptOutput(stdout, stderr)))
 		result, err := program.Run()
 		if err != nil {
 			return "", fmt.Errorf("run login prompt: %w", err)
@@ -62,6 +62,14 @@ func ReadSecretOrPipe(stdin io.Reader, stdout io.Writer, _ io.Writer) (string, e
 	}
 
 	return token, nil
+}
+
+func promptOutput(stdout io.Writer, stderr io.Writer) io.Writer {
+	if stderr != nil {
+		return stderr
+	}
+
+	return stdout
 }
 
 func (m loginModel) Init() tea.Cmd {

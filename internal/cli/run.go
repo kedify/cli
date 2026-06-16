@@ -52,7 +52,7 @@ type context struct {
 	client        clusterService
 	credentials   credentialsStore
 	readSecret    func(io.Reader, io.Writer, io.Writer) (string, error)
-	selectCluster func(io.Reader, io.Writer, []map[string]any) (map[string]any, error)
+	selectCluster func(io.Reader, io.Writer, io.Writer, []map[string]any) (map[string]any, error)
 	writeOutput   func(io.Writer, any, string) error
 }
 

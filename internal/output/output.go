@@ -35,8 +35,14 @@ func Write(w io.Writer, value any, format string) error {
 		data = append(data, '\n')
 	}
 
-	_, err = w.Write(data)
-	return err
+	n, err := w.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 func renderText(value any) ([]byte, error) {
