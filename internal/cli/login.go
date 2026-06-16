@@ -26,6 +26,6 @@ func (c *LoginCmd) Run(ctx *context) error {
 		return err
 	}
 
-	_, err := fmt.Fprintln(ctx.stdout, "Credentials stored.")
+	_, err := fmt.Fprintln(ctx.stderr, "Credentials stored.")
 	return err
 }

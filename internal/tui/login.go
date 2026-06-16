@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-const apiKeysURL = "https://dashboard.dev.kedify.io/api-keys"
+const apiKeysURL = "https://dashboard.dev.kedify.io/api-keys" // #nosec G101 -- public dashboard URL, not a credential
 
 var (
 	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))

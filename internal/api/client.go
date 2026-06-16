@@ -47,10 +47,11 @@ func (c *Client) ListClusters(apiURL, token string) ([]map[string]any, error) {
 			break
 		}
 
-		page = response.PageInfo.Page + 1
-		if page <= 1 {
-			page++
+		nextPage := response.PageInfo.Page + 1
+		if nextPage <= page {
+			nextPage = page + 1
 		}
+		page = nextPage
 	}
 
 	return allItems, nil

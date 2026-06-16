@@ -1,8 +1,10 @@
 package cli
 
+import "strings"
+
 func resolveToken(ctx *context) (string, error) {
-	if ctx.token != "" {
-		return ctx.token, nil
+	if token := strings.TrimSpace(ctx.token); token != "" {
+		return token, nil
 	}
 
 	creds, err := ctx.credentials.ReadCredentials()
@@ -10,5 +12,5 @@ func resolveToken(ctx *context) (string, error) {
 		return "", err
 	}
 
-	return creds.Token, nil
+	return strings.TrimSpace(creds.Token), nil
 }

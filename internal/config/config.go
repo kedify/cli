@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	credentialsDir  = ".config/kedify"
+	credentialsDir  = ".config/kedify" // #nosec G101 -- filesystem path, not a credential
 	credentialsFile = "credentials.json"
 	fileModeDir     = 0o700
 	fileModeCreds   = 0o600
@@ -90,7 +90,7 @@ func readCredentialsFile() (Credentials, error) {
 		return Credentials{}, err
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is derived from the current user's home directory and fixed credentials location
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Credentials{}, errors.New("credentials not found, run `kedify login` first")
