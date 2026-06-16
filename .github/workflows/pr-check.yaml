@@ -1,0 +1,12 @@
+name: PR Check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pr-check:
+    uses: kedify/github-meta/.github/workflows/go-pr-check.yaml@main
+    with:
+      skip_private_key_setup: true
+      continue_on_error: false
