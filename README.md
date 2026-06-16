@@ -14,7 +14,7 @@ This repository contains an experimental `kedify` CLI built with `kong` for comm
   Commands can also use `--token` or `KEDIFY_TOKEN` instead of the stored credentials file.
 - `kedify list clusters`
   Calls the Kedify API and transparently reads all pages before printing the final cluster list.
-- `kedify get cluster [name]`
+- `kedify get cluster [name-or-id]`
   Prints one cluster by name or id, and shows an interactive picker when no name is provided.
 - Output formatting
   `kedify list clusters` and `kedify get cluster` support `-o` and `--output` with `text`, `json`, or `yaml`. `text` is the default.

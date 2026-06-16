@@ -17,9 +17,12 @@ func (c *GetClusterCmd) Run(ctx *context) error {
 		return err
 	}
 
-	clusters, err := ctx.client.ListClusters(ctx.apiURL, token)
-	if err != nil {
-		return err
+	var clusters []map[string]any
+	if c.Name == "" || !isUUID(c.Name) {
+		clusters, err = ctx.client.ListClusters(ctx.apiURL, token)
+		if err != nil {
+			return err
+		}
 	}
 
 	var cluster map[string]any
