@@ -2,10 +2,9 @@ package cli
 
 import (
 	"fmt"
-	"regexp"
-)
 
-var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	"github.com/google/uuid"
+)
 
 type GetClusterCmd struct {
 	Name   string `arg:"" optional:"" name:"name" help:"Cluster name or id."`
@@ -64,7 +63,8 @@ func findCluster(clusters []map[string]any, query string) (map[string]any, error
 }
 
 func isUUID(value string) bool {
-	return uuidPattern.MatchString(value)
+	_, err := uuid.Parse(value)
+	return err == nil
 }
 
 func clusterString(cluster map[string]any, key string) string {
