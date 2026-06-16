@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/zalando/go-keyring"
 )
 
 const (
@@ -14,13 +16,52 @@ const (
 	credentialsFile = "credentials.json"
 	fileModeDir     = 0o700
 	fileModeCreds   = 0o600
+	keyringService  = "io.kedify.cli"
+	keyringUser     = "default"
 )
 
 type Credentials struct {
 	Token string `json:"token"`
 }
 
+var (
+	keyringSet = keyring.Set
+	keyringGet = keyring.Get
+)
+
 func WriteCredentials(creds Credentials) error {
+	err := keyringSet(keyringService, keyringUser, creds.Token)
+	if err == nil {
+		return nil
+	}
+	if !isKeyringUnavailable(err) {
+		return fmt.Errorf("write credentials to keyring: %w", err)
+	}
+
+	return writeCredentialsFile(creds)
+}
+
+func ReadCredentials() (Credentials, error) {
+	token, err := keyringGet(keyringService, keyringUser)
+	switch {
+	case err == nil:
+		token = strings.TrimSpace(token)
+		if token == "" {
+			return Credentials{}, errors.New("keyring entry does not contain a token")
+		}
+		return Credentials{Token: token}, nil
+	case errors.Is(err, keyring.ErrNotFound), isKeyringUnavailable(err):
+		return readCredentialsFile()
+	default:
+		return Credentials{}, fmt.Errorf("read credentials from keyring: %w", err)
+	}
+}
+
+func APIURLFromEnv() string {
+	return strings.TrimSpace(os.Getenv("KEDIFY_API_URL"))
+}
+
+func writeCredentialsFile(creds Credentials) error {
 	path, err := credentialsPath()
 	if err != nil {
 		return err
@@ -43,7 +84,7 @@ func WriteCredentials(creds Credentials) error {
 	return nil
 }
 
-func ReadCredentials() (Credentials, error) {
+func readCredentialsFile() (Credentials, error) {
 	path, err := credentialsPath()
 	if err != nil {
 		return Credentials{}, err
@@ -69,10 +110,6 @@ func ReadCredentials() (Credentials, error) {
 	return creds, nil
 }
 
-func APIURLFromEnv() string {
-	return strings.TrimSpace(os.Getenv("KEDIFY_API_URL"))
-}
-
 func credentialsPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -80,4 +117,27 @@ func credentialsPath() (string, error) {
 	}
 
 	return filepath.Join(homeDir, credentialsDir, credentialsFile), nil
+}
+
+func isKeyringUnavailable(err error) bool {
+	if errors.Is(err, keyring.ErrUnsupportedPlatform) {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"dbus",
+		"secret service",
+		"org.freedesktop.secrets",
+		"keyring is not available",
+		"credential manager is not available",
+		"keychain is not available",
+		"not supported",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+
+	return false
 }
