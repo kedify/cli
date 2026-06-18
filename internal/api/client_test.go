@@ -88,3 +88,94 @@ func TestGetClusterCallsDedicatedEndpoint(t *testing.T) {
 		t.Fatalf("cluster = %#v", cluster)
 	}
 }
+
+func TestGetRecommendationsCallsDedicatedEndpoint(t *testing.T) {
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596/recommendations" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`[{"kind":"cpu"}]`)),
+			Header:     make(http.Header),
+		}, nil
+	})}}
+
+	recommendations, err := client.GetRecommendations("https://api.dev.kedify.io/v1", "token", "fc6af0dc-685b-4055-805d-0d3e0ead1596")
+	if err != nil {
+		t.Fatalf("GetRecommendations() error = %v", err)
+	}
+
+	items, ok := recommendations.([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("recommendations = %#v", recommendations)
+	}
+}
+
+func TestGetRecommendationsReadsAllPages(t *testing.T) {
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596/recommendations" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+
+		page := r.URL.Query().Get("page")
+		var body string
+		switch page {
+		case "":
+			body = `{"items":[{"kind":"cpu"}],"pageInfo":{"hasNext":true,"page":1}}`
+		case "2":
+			body = `{"items":[{"kind":"memory"}],"pageInfo":{"hasNext":false,"page":2}}`
+		default:
+			return &http.Response{
+				StatusCode: http.StatusBadRequest,
+				Status:     "400 Bad Request",
+				Body:       io.NopCloser(strings.NewReader("unexpected page")),
+				Header:     make(http.Header),
+			}, nil
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+		}, nil
+	})}}
+
+	recommendations, err := client.GetRecommendations("https://api.dev.kedify.io/v1", "token", "fc6af0dc-685b-4055-805d-0d3e0ead1596")
+	if err != nil {
+		t.Fatalf("GetRecommendations() error = %v", err)
+	}
+
+	items, ok := recommendations.([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("recommendations = %#v", recommendations)
+	}
+}
+
+func TestGetRecommendationsFallsBackToNonPaginatedPayload(t *testing.T) {
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596/recommendations" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Body:       io.NopCloser(strings.NewReader(`{"summary":{"count":1}}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}}
+
+	recommendations, err := client.GetRecommendations("https://api.dev.kedify.io/v1", "token", "fc6af0dc-685b-4055-805d-0d3e0ead1596")
+	if err != nil {
+		t.Fatalf("GetRecommendations() error = %v", err)
+	}
+
+	payload, ok := recommendations.(map[string]any)
+	if !ok || payload["summary"] == nil {
+		t.Fatalf("recommendations = %#v", recommendations)
+	}
+}

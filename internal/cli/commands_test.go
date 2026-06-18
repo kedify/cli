@@ -30,12 +30,13 @@ func (f *fakeCredentialsStore) WriteCredentials(creds credentials) error {
 }
 
 type fakeClusterService struct {
-	clusters  []map[string]any
-	cluster   map[string]any
-	err       error
-	lastURL   string
-	lastToken string
-	lastID    string
+	clusters        []map[string]any
+	cluster         map[string]any
+	recommendations any
+	err             error
+	lastURL         string
+	lastToken       string
+	lastID          string
 }
 
 func (f *fakeClusterService) ListClusters(apiURL, token string) ([]map[string]any, error) {
@@ -55,6 +56,16 @@ func (f *fakeClusterService) GetCluster(apiURL, token, clusterID string) (map[st
 		return nil, f.err
 	}
 	return f.cluster, nil
+}
+
+func (f *fakeClusterService) GetRecommendations(apiURL, token, clusterID string) (any, error) {
+	f.lastURL = apiURL
+	f.lastToken = token
+	f.lastID = clusterID
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.recommendations, nil
 }
 
 func TestLoginCmdRunStoresCredentials(t *testing.T) {
@@ -150,6 +161,49 @@ func TestLoginCmdRunIgnoresWhitespaceContextToken(t *testing.T) {
 
 	if store.wrote.Token != "secret-token" {
 		t.Fatalf("stored token = %q, want %q", store.wrote.Token, "secret-token")
+	}
+}
+
+func TestAuthTokenCmdRunPrintsStoredToken(t *testing.T) {
+	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      stdout,
+		stderr:      stderr,
+		credentials: store,
+	}
+
+	if err := (&AuthTokenCmd{}).Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if stdout.String() != "stored-token\n" {
+		t.Fatalf("stdout = %q, want token with newline", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestAuthTokenCmdRunPrefersContextToken(t *testing.T) {
+	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
+	stdout := &bytes.Buffer{}
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      stdout,
+		stderr:      &bytes.Buffer{},
+		token:       "override-token",
+		credentials: store,
+	}
+
+	if err := (&AuthTokenCmd{}).Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if stdout.String() != "override-token\n" {
+		t.Fatalf("stdout = %q, want override token with newline", stdout.String())
 	}
 }
 
@@ -394,6 +448,88 @@ func TestGetClusterCmdRunUsesSelectorWhenNameMissing(t *testing.T) {
 	}
 	if service.lastID != "fc6af0dc-685b-4055-805d-0d3e0ead1596" {
 		t.Fatalf("service lastID = %q", service.lastID)
+	}
+}
+
+func TestListRecommendationsCmdRunWritesRecommendations(t *testing.T) {
+	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
+	service := &fakeClusterService{
+		recommendations: map[string]any{
+			"items": []map[string]any{{"kind": "cpu"}},
+		},
+	}
+
+	var gotValue any
+	var gotFormat string
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      &bytes.Buffer{},
+		stderr:      &bytes.Buffer{},
+		apiURL:      "https://api.dev.kedify.io/v1",
+		token:       "override-token",
+		client:      service,
+		credentials: store,
+		writeOutput: func(_ io.Writer, value any, format string) error {
+			gotValue = value
+			gotFormat = format
+			return nil
+		},
+	}
+
+	id := "fc6af0dc-685b-4055-805d-0d3e0ead1596"
+	if err := (&ListRecommendationsCmd{ClusterID: id, Output: "yaml"}).Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	payload, ok := gotValue.(map[string]any)
+	if !ok {
+		t.Fatalf("got output value = %#v", gotValue)
+	}
+	if gotFormat != "yaml" {
+		t.Fatalf("output format = %q, want %q", gotFormat, "yaml")
+	}
+	if payload["items"] == nil {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if service.lastToken != "override-token" {
+		t.Fatalf("service token = %q, want %q", service.lastToken, "override-token")
+	}
+	if service.lastID != id {
+		t.Fatalf("service lastID = %q, want %q", service.lastID, id)
+	}
+}
+
+func TestListRecommendationsCmdRunWritesResultsOnlyToStdout(t *testing.T) {
+	store := &fakeCredentialsStore{creds: credentials{Token: "stored-token"}}
+	service := &fakeClusterService{
+		recommendations: []map[string]any{{"kind": "cpu"}},
+	}
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	ctx := &context{
+		stdin:       bytes.NewBuffer(nil),
+		stdout:      stdout,
+		stderr:      stderr,
+		apiURL:      "https://api.dev.kedify.io/v1",
+		token:       "override-token",
+		client:      service,
+		credentials: store,
+		writeOutput: writeOutput,
+	}
+
+	if err := (&ListRecommendationsCmd{
+		ClusterID: "fc6af0dc-685b-4055-805d-0d3e0ead1596",
+		Output:    "json",
+	}).Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if stdout.Len() == 0 {
+		t.Fatal("stdout is empty, want rendered output")
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
 }
 

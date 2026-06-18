@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -12,17 +13,28 @@ import (
 type CLI struct {
 	APIURL string   `name:"apiurl" help:"Base URL for the Kedify API." default:"https://api.dev.kedify.io/v1" env:"KEDIFY_API_URL"`
 	Token  string   `name:"token" help:"Kedify API token." env:"KEDIFY_TOKEN"`
+	Auth   AuthCmd  `cmd:"" help:"Authentication helpers."`
+	Apply  ApplyCmd `cmd:"" help:"Apply Kedify recommendations."`
 	Get    GetCmd   `cmd:"" help:"Get Kedify resources."`
-	Login  LoginCmd `cmd:"" help:"Read an auth token from stdin and store it locally. Generate a token at https://dashboard.dev.kedify.io/api-keys."`
 	List   ListCmd  `cmd:"" help:"List Kedify resources."`
+}
+
+type AuthCmd struct {
+	Login LoginCmd     `cmd:"" help:"Read an auth token from stdin and store it locally. Generate a token at https://dashboard.dev.kedify.io/api-keys."`
+	Token AuthTokenCmd `cmd:"" help:"Print the auth token."`
 }
 
 type GetCmd struct {
 	Cluster GetClusterCmd `cmd:"" help:"Get a cluster by name or id. If no name is provided, an interactive picker is shown."`
 }
 
+type ApplyCmd struct {
+	Recommendations ApplyRecommendationsCmd `cmd:"" help:"Apply recommendations to a Helm values file."`
+}
+
 type ListCmd struct {
-	Clusters ListClustersCmd `cmd:"" help:"List clusters."`
+	Clusters        ListClustersCmd        `cmd:"" help:"List clusters."`
+	Recommendations ListRecommendationsCmd `cmd:"" help:"List recommendations for a cluster id."`
 }
 
 type ListClustersCmd struct {
@@ -37,6 +49,7 @@ type credentialsStore interface {
 type clusterService interface {
 	ListClusters(apiURL, token string) ([]map[string]any, error)
 	GetCluster(apiURL, token, clusterID string) (map[string]any, error)
+	GetRecommendations(apiURL, token, clusterID string) (any, error)
 }
 
 type credentials struct {
@@ -89,9 +102,28 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	app.apiURL = cli.APIURL
 	app.token = cli.Token
 	if err := kctx.Run(app); err != nil {
+		var cmdErr *commandResultError
+		if errors.As(err, &cmdErr) {
+			if cmdErr.payload != nil {
+				if writeErr := app.writeOutput(stdout, cmdErr.payload, "json"); writeErr != nil {
+					_, _ = fmt.Fprintf(stderr, "kedify: error: %v\n", writeErr)
+					return 1
+				}
+			}
+			return cmdErr.exitCode
+		}
 		_, _ = fmt.Fprintf(stderr, "kedify: error: %v\n", err)
 		return 1
 	}
 
 	return 0
+}
+
+type commandResultError struct {
+	exitCode int
+	payload  any
+}
+
+func (e *commandResultError) Error() string {
+	return "command failed"
 }
