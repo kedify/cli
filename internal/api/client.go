@@ -137,6 +137,11 @@ func (c *Client) listPage(apiURL, token, path string, page int) (paginatedRespon
 		return paginatedResponse{}, fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
+	trimmedBody := strings.TrimSpace(string(body))
+	if strings.HasPrefix(trimmedBody, "[") {
+		return paginatedResponse{}, fmt.Errorf("response is not paginated")
+	}
+
 	var payload paginatedResponse
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return paginatedResponse{}, fmt.Errorf("parse response as json: %w", err)

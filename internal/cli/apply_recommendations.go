@@ -208,7 +208,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 		})
 	}
 
-	valuesData, err := os.ReadFile(c.ValuesFile)
+	valuesData, err := os.ReadFile(c.ValuesFile) // #nosec G304 -- CLI intentionally reads a user-selected Helm values file.
 	if err != nil {
 		return err
 	}
@@ -285,7 +285,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 			result.Result = "planned"
 		}
 		if !c.DryRun {
-			if err := os.WriteFile(c.OutputFile, overrideBytes, 0o644); err != nil {
+			if err := os.WriteFile(c.OutputFile, overrideBytes, 0o600); err != nil { // #nosec G304 -- CLI intentionally writes a user-selected override output file.
 				return fmt.Errorf("write override output: %w", err)
 			}
 			result.ChangedFiles = append(result.ChangedFiles, c.OutputFile)
@@ -363,7 +363,7 @@ func parseRequestedResources(raw string) ([]string, error) {
 }
 
 func loadRecommendationsFile(path string) ([]recommendationEntry, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- CLI intentionally reads a user-selected recommendations file.
 	if err != nil {
 		return nil, fmt.Errorf("read recommendations file: %w", err)
 	}
@@ -497,7 +497,7 @@ func renderHelmChart(chartPath, valuesFile string) ([]byte, error) {
 	if _, err := exec.LookPath("helm"); err != nil {
 		return nil, fmt.Errorf("render helm chart: helm not found in PATH")
 	}
-	cmd := exec.Command("helm", "template", "kedify-apply", chartPath, "--values", valuesFile)
+	cmd := exec.Command("helm", "template", "kedify-apply", chartPath, "--values", valuesFile) // #nosec G204 -- executable is fixed; args are explicit CLI inputs for local Helm rendering.
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("render helm chart: %w: %s", err, strings.TrimSpace(string(output)))
@@ -691,7 +691,7 @@ func unifiedDiff(valuesFile string, original, patched []byte) (string, error) {
 	}
 	defer removeTempDiffFile(patchedFile)
 
-	cmd := exec.Command("diff", "-u", "--label", filepath.Clean(valuesFile), "--label", filepath.Clean(valuesFile), originalFile, patchedFile)
+	cmd := exec.Command("diff", "-u", "--label", filepath.Clean(valuesFile), "--label", filepath.Clean(valuesFile), originalFile, patchedFile) // #nosec G204 -- executable is fixed; args are controlled temp files and a user-selected values path label.
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		return string(output), nil
@@ -733,7 +733,7 @@ func writePatchedValuesFile(path string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("stat values file: %w", err)
 	}
-	if err := os.WriteFile(path, data, info.Mode()); err != nil {
+	if err := os.WriteFile(path, data, info.Mode()); err != nil { // #nosec G304,G306 -- CLI intentionally updates the user-selected values file while preserving its existing mode.
 		return fmt.Errorf("write patched values file: %w", err)
 	}
 	return nil
