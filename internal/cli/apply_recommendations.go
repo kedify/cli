@@ -706,9 +706,7 @@ func unifiedDiff(valuesFile string, original, patched []byte) (string, error) {
 }
 
 func removeTempDiffFile(path string) {
-	if err := os.Remove(path); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: remove temp diff file %q: %v\n", path, err)
-	}
+	_ = os.Remove(path)
 }
 
 func writeTempDiffFile(prefix string, data []byte) (string, error) {

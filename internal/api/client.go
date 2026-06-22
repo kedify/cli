@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 )
 
 const requestTimeout = 30 * time.Second
+
+var errNotPaginated = errors.New("response is not paginated")
 
 type Client struct {
 	httpClient *http.Client
@@ -66,7 +69,7 @@ func (c *Client) GetRecommendations(apiURL, token, clusterID string) (any, error
 	if err == nil {
 		return items, nil
 	}
-	if !strings.Contains(err.Error(), "response is not paginated") {
+	if !errors.Is(err, errNotPaginated) {
 		return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
 	}
 
@@ -139,7 +142,7 @@ func (c *Client) listPage(apiURL, token, path string, page int) (paginatedRespon
 
 	trimmedBody := strings.TrimSpace(string(body))
 	if strings.HasPrefix(trimmedBody, "[") {
-		return paginatedResponse{}, fmt.Errorf("response is not paginated")
+		return paginatedResponse{}, errNotPaginated
 	}
 
 	var payload paginatedResponse
@@ -148,7 +151,7 @@ func (c *Client) listPage(apiURL, token, path string, page int) (paginatedRespon
 	}
 
 	if payload.Items == nil || payload.PageInfo.Page == 0 {
-		return paginatedResponse{}, fmt.Errorf("response is not paginated")
+		return paginatedResponse{}, errNotPaginated
 	}
 
 	return payload, nil
