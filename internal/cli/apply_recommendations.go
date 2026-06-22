@@ -494,6 +494,9 @@ func recommendationLabelText(recommendation recommendationEntry, key string) str
 }
 
 func renderHelmChart(chartPath, valuesFile string) ([]byte, error) {
+	if _, err := exec.LookPath("helm"); err != nil {
+		return nil, fmt.Errorf("render helm chart: helm not found in PATH")
+	}
 	cmd := exec.Command("helm", "template", "kedify-apply", chartPath, "--values", valuesFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -673,17 +676,20 @@ func marshalYAMLNode(root *yaml.Node) ([]byte, error) {
 }
 
 func unifiedDiff(valuesFile string, original, patched []byte) (string, error) {
+	if _, err := exec.LookPath("diff"); err != nil {
+		return "", fmt.Errorf("generate unified diff: diff not found in PATH")
+	}
 	originalFile, err := writeTempDiffFile("original-values-", original)
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(originalFile)
+	defer removeTempDiffFile(originalFile)
 
 	patchedFile, err := writeTempDiffFile("patched-values-", patched)
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(patchedFile)
+	defer removeTempDiffFile(patchedFile)
 
 	cmd := exec.Command("diff", "-u", "--label", filepath.Clean(valuesFile), "--label", filepath.Clean(valuesFile), originalFile, patchedFile)
 	output, err := cmd.CombinedOutput()
@@ -697,6 +703,12 @@ func unifiedDiff(valuesFile string, original, patched []byte) (string, error) {
 	}
 
 	return "", fmt.Errorf("generate unified diff: %w", err)
+}
+
+func removeTempDiffFile(path string) {
+	if err := os.Remove(path); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: remove temp diff file %q: %v\n", path, err)
+	}
 }
 
 func writeTempDiffFile(prefix string, data []byte) (string, error) {

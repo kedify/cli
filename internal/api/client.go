@@ -66,6 +66,9 @@ func (c *Client) GetRecommendations(apiURL, token, clusterID string) (any, error
 	if err == nil {
 		return items, nil
 	}
+	if !strings.Contains(err.Error(), "response is not paginated") {
+		return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
+	}
 
 	var payload any
 	if err := c.getJSON(apiURL, token, path, &payload); err != nil {

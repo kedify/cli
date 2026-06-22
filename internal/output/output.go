@@ -49,6 +49,11 @@ func Write(w io.Writer, value any, format string) error {
 func renderText(value any) ([]byte, error) {
 	switch v := value.(type) {
 	case []any:
+		// An empty list is ambiguous (could be clusters, recommendations, or something else),
+		// so fall back to YAML to avoid misleading "No clusters found" output.
+		if len(v) == 0 {
+			return yaml.Marshal(v)
+		}
 		if clusters, ok := asClusterList(v); ok {
 			if looksLikeClusterList(clusters) {
 				return renderClusterListText(clusters), nil
@@ -56,7 +61,6 @@ func renderText(value any) ([]byte, error) {
 			if looksLikeRecommendationList(clusters) {
 				return renderRecommendationListText(clusters), nil
 			}
-			return yaml.Marshal(v)
 		}
 		return yaml.Marshal(v)
 	case []map[string]any:
