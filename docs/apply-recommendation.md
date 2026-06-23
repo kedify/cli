@@ -143,7 +143,7 @@ The command supports these output formats:
 
 ### `diff`
 
-Emit a unified diff showing the change that would be made to the values file.
+Emit a unified diff showing the change that would be made to the values file (requires `diff` on PATH).
 
 ### `override`
 

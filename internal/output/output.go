@@ -411,6 +411,7 @@ func recommendationGroupKey(recommendation map[string]any) string {
 		textValue(recommendation["kind"]),
 		textValue(recommendation["name"]),
 		textValue(recommendation["namespace"]),
+		recommendationLabelText(recommendation, "workloadContainer"),
 	}, "\x00")
 }
 
