@@ -20,6 +20,8 @@ This repository contains an experimental `kedify` CLI built with `kong` for comm
   Prints one cluster by name or id, and shows an interactive picker when no name is provided.
 - `kedify list recommendations <cluster-id>`
   Prints the recommendations payload for a cluster id.
+- `kedify apply recommendations <kind/name>`
+  Applies recommendations from a saved JSON or YAML file to a Helm values file and can emit `json`, `diff`, or `override` output.
 - Output formatting
   `kedify list clusters`, `kedify get cluster`, and `kedify list recommendations` support `-o` and `--output` with `text`, `json`, or `yaml`. `text` is the default.
 
@@ -113,6 +115,41 @@ List recommendations for a cluster as JSON:
 ```bash
 ./bin/kedify list recommendations fc6af0dc-685b-4055-805d-0d3e0ead1596 -o json
 ```
+
+Apply recommendations to a Helm values file and print the patch plan as JSON:
+
+```bash
+./bin/kedify apply recommendations deployment/my-app \
+  --namespace my-namespace \
+  --chart-path ./chart \
+  --values-file ./chart/values.yaml \
+  --recommendations-file ./recommendations.json \
+  --resources cpu-requests,memory-limits \
+  --format json \
+  --dry-run
+```
+
+Apply recommendations and write an override file:
+
+```bash
+./bin/kedify apply recommendations deployment/my-app \
+  --namespace my-namespace \
+  --chart-path ./chart \
+  --values-file ./chart/values.yaml \
+  --recommendations-file ./recommendations.json \
+  --resources cpu-requests,memory-limits \
+  --format override \
+  --output-file ./override-values.yaml
+```
+
+Notes for `apply recommendations`:
+
+- The command is Helm-only in v1.
+- `--recommendations-file`, `--chart-path`, and `--values-file` are required.
+- `--container` is optional. If omitted, the CLI matches all recommendation-bearing containers in the workload.
+- All matched containers must be safely patchable for the run to succeed.
+- `--output-file` is required for `--format override` unless `--dry-run` is set.
+- JSON output includes top-level `containers` and per-entry `container` fields for multi-container runs.
 
 Pick a cluster interactively:
 

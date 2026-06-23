@@ -30,6 +30,7 @@ kedify apply recommendations deployment/<NAME> \
   [--resources cpu-requests,cpu-limits,memory-requests,memory-limits] \
   [--min-confidence 60] \
   [--format diff|override|json] \
+  [--output-file <PATH>] \
   [--dry-run]
 ```
 
@@ -42,6 +43,7 @@ Notes:
 - `--chart-path` is required in Helm mode
 - `--values-file` is required in Helm mode
 - `--resources` is optional
+- `--output-file` is required when `--format override` is used without `--dry-run`
 
 ## Resource Selection
 
@@ -157,11 +159,19 @@ Emit a unified diff showing the change that would be made to the values file (re
 
 Emit a small generated Helm override values file containing only the recommended changes.
 
+When `--format override` is used without `--dry-run`, `--output-file` is required.
+
 ### `json`
 
 Emit machine-readable patch plan or patch result JSON.
 
 The JSON output is not just raw recommendation data. It should describe what the patcher tried to do and what happened.
+
+The JSON payload currently includes:
+
+- top-level `container` when exactly one container is matched
+- top-level `containers` when one or more containers are matched
+- per-entry `container` on `matched`, `patched`, and `reasons`
 
 ## Dry Run
 
@@ -207,7 +217,7 @@ This is intended to make CI fail fast when the recommendation cannot be converte
 The happy path in CI is:
 
 1. Run Kedify recommendation discovery.
-2. Select a workload, namespace, container, and resource set.
+2. Select a workload, namespace, optional container filter, and resource set.
 3. Run `kedify apply recommendations ...`.
 4. Generate either a diff, override file, or JSON patch result.
 5. Commit the resulting change in CI.
@@ -246,6 +256,6 @@ The first candidates are:
 The immediate follow-up should be:
 
 - replace the hardcoded Deployment-only target check with a supported workload-kind list or switch-based dispatcher
-- keep the same targeting model of kind, name, namespace, and container
+- keep the same targeting model of kind, name, namespace, and optional container filter
 - extend Helm render verification and values mapping logic to these additional workload kinds one by one
 - continue to fail with a structured `unsupported` result for kinds that are not yet implemented
