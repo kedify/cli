@@ -185,8 +185,9 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 			"namespace":   "default",
 			"resourceUID": "default/deployment/demo/demo/cpu-requests",
 			"labels": map[string]any{
-				"originalValue":  "100m",
-				"suggestedValue": "200m",
+				"workloadContainer": "demo-container",
+				"originalValue":     "100m",
+				"suggestedValue":    "200m",
 			},
 		},
 		map[string]any{
@@ -195,8 +196,9 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 			"namespace":   "default",
 			"resourceUID": "default/deployment/demo/demo/memory-limits",
 			"labels": map[string]any{
-				"originalValue":  "512Mi",
-				"suggestedValue": "256Mi",
+				"workloadContainer": "demo-container",
+				"originalValue":     "512Mi",
+				"suggestedValue":    "256Mi",
 			},
 		},
 	}
@@ -208,6 +210,7 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"KIND",
+		"CONTAINER",
 		"NAME",
 		"NAMESPACE",
 		"CPU REQUESTS",
@@ -215,6 +218,7 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 		"MEMORY REQUESTS",
 		"MEMORY LIMITS",
 		"Deployment",
+		"demo-container",
 		"demo",
 		"default",
 		"100m -> 200m",
@@ -224,7 +228,7 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 			t.Fatalf("expected %q in output %q", expected, got)
 		}
 	}
-	if !strings.Contains(got, "KIND") || !strings.Contains(got, "MEMORY LIMITS") {
+	if !strings.Contains(got, "KIND") || !strings.Contains(got, "CONTAINER") || !strings.Contains(got, "MEMORY LIMITS") {
 		t.Fatalf("unexpected header order in output %q", got)
 	}
 	if strings.Contains(got, "AGENT VERSION") {
@@ -260,6 +264,7 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"KIND",
+		"CONTAINER",
 		"NAME",
 		"NAMESPACE",
 		"CPU REQUESTS",
@@ -267,6 +272,7 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 		"MEMORY REQUESTS",
 		"MEMORY LIMITS",
 		"Deployment",
+		"keda-add-ons-http-interceptor",
 		"keda-add-ons-http-interceptor",
 		"keda",
 		"250m -> 20m",
@@ -284,8 +290,14 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	if !strings.Contains(got, "keda-operator") || !strings.Contains(got, "100Mi -> 46Mi") {
 		t.Fatalf("expected merged workload rows in output %q", got)
 	}
-	if !strings.Contains(got, "NAME") || !strings.Contains(got, "MEMORY LIMITS") {
+	if !strings.Contains(got, "audit-sidecar") || !strings.Contains(got, "16Mi -> 24Mi") || !strings.Contains(got, "64Mi -> 72Mi") {
+		t.Fatalf("expected sidecar recommendation row in output %q", got)
+	}
+	if !strings.Contains(got, "NAME") || !strings.Contains(got, "CONTAINER") || !strings.Contains(got, "MEMORY LIMITS") {
 		t.Fatalf("missing recommendation headers in output %q", got)
+	}
+	if !strings.Contains(got, "Deployment  manager") {
+		t.Fatalf("expected workload container column in output %q", got)
 	}
 }
 

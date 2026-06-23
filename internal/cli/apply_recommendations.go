@@ -24,7 +24,7 @@ var supportedRecommendationResources = []string{
 type ApplyRecommendationsCmd struct {
 	Target              string `arg:"" name:"target" help:"Target workload in kind/name form, for example deployment/my-app."`
 	Namespace           string `name:"namespace" help:"Kubernetes namespace." required:""`
-	Container           string `name:"container" help:"Container name." required:""`
+	Container           string `name:"container" help:"Container name."`
 	Resources           string `name:"resources" help:"Comma-separated resources to apply."`
 	RecommendationsFile string `name:"recommendations-file" help:"Recommendations JSON or YAML file." required:""`
 	ChartPath           string `name:"chart-path" help:"Path to the Helm chart." required:""`
@@ -50,6 +50,7 @@ type applyRecommendationsResult struct {
 	Target       string                      `json:"target"`
 	Namespace    string                      `json:"namespace"`
 	Container    string                      `json:"container"`
+	Containers   []string                    `json:"containers,omitempty"`
 	Format       string                      `json:"format"`
 	DryRun       bool                        `json:"dryRun"`
 	Matched      []applyRecommendationMatch  `json:"matched,omitempty"`
@@ -60,6 +61,7 @@ type applyRecommendationsResult struct {
 }
 
 type applyRecommendationMatch struct {
+	Container      string `json:"container,omitempty"`
 	Resource       string `json:"resource"`
 	Status         string `json:"status"`
 	Confidence     int    `json:"confidence"`
@@ -68,6 +70,7 @@ type applyRecommendationMatch struct {
 }
 
 type applyPatchedResource struct {
+	Container      string `json:"container,omitempty"`
 	Resource       string `json:"resource"`
 	Path           string `json:"path"`
 	OriginalValue  string `json:"originalValue"`
@@ -75,9 +78,10 @@ type applyPatchedResource struct {
 }
 
 type applyRecommendationReason struct {
-	Code     string `json:"code"`
-	Resource string `json:"resource,omitempty"`
-	Message  string `json:"message"`
+	Container string `json:"container,omitempty"`
+	Code      string `json:"code"`
+	Resource  string `json:"resource,omitempty"`
+	Message   string `json:"message"`
 }
 
 type renderedDeployment struct {
@@ -100,6 +104,13 @@ type renderedDeployment struct {
 type valuesCandidate struct {
 	Path []string
 	Node *yaml.Node
+}
+
+type selectedContainerRecommendations struct {
+	Container          string
+	Indexed            map[string]recommendationEntry
+	DuplicateResources []string
+	SelectedResources  []string
 }
 
 func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
@@ -139,60 +150,96 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 		return err
 	}
 
-	matchingRecommendations := filterMatchingRecommendations(recommendations, "Deployment", name, c.Namespace, c.Container)
-	indexedRecommendations, duplicateResources := indexRecommendationsByResource(matchingRecommendations)
-	selectedResources := requestedResources
-	if len(selectedResources) == 0 {
-		selectedResources = availableRecommendationResources(indexedRecommendations)
-	}
-
-	for _, resource := range selectedResources {
-		recommendation, ok := indexedRecommendations[resource]
-		if ok {
-			result.Matched = append(result.Matched, applyRecommendationMatch{
-				Resource:       resource,
-				Status:         recommendation.Status,
-				Confidence:     recommendationConfidence(recommendation),
-				OriginalValue:  recommendationLabelText(recommendation, "originalValue"),
-				SuggestedValue: recommendationLabelText(recommendation, "suggestedValue"),
-			})
-		}
-	}
-
-	for _, resource := range selectedResources {
-		if slices.Contains(duplicateResources, resource) {
+	workloadRecommendations := filterWorkloadRecommendations(recommendations, "Deployment", name, c.Namespace)
+	matchedContainers, err := matchedRecommendationContainers(workloadRecommendations, c.Container)
+	if err != nil {
+		var resolutionErr recommendationSelectionError
+		if errors.As(err, &resolutionErr) {
 			result.Reasons = append(result.Reasons, applyRecommendationReason{
-				Code:     "ambiguous",
-				Resource: resource,
-				Message:  fmt.Sprintf("multiple recommendations matched resource %q", resource),
+				Code:    resolutionErr.Code,
+				Message: resolutionErr.Message,
+			})
+			return &commandResultError{exitCode: 1, payload: result}
+		}
+		return err
+	}
+	result.Containers = matchedContainers
+	if len(matchedContainers) == 1 {
+		result.Container = matchedContainers[0]
+	}
+
+	containerSelections := make([]selectedContainerRecommendations, 0, len(matchedContainers))
+	for _, container := range matchedContainers {
+		matchingRecommendations := filterRecommendationsByContainer(workloadRecommendations, container)
+		indexedRecommendations, duplicateResources := indexRecommendationsByResource(matchingRecommendations)
+		selectedResources := requestedResources
+		if len(selectedResources) == 0 {
+			selectedResources = availableRecommendationResources(indexedRecommendations)
+		}
+		if len(selectedResources) == 0 {
+			result.Reasons = append(result.Reasons, applyRecommendationReason{
+				Container: container,
+				Code:      "not_found",
+				Message:   "no applicable recommendations found for the selected workload and container",
 			})
 			continue
 		}
 
-		recommendation, ok := indexedRecommendations[resource]
-		if !ok {
-			result.Reasons = append(result.Reasons, applyRecommendationReason{
-				Code:     "not_found",
-				Resource: resource,
-				Message:  fmt.Sprintf("no waiting recommendation found for resource %q", resource),
-			})
-			continue
-		}
-
-		if recommendationConfidence(recommendation) < c.MinConfidence {
-			result.Reasons = append(result.Reasons, applyRecommendationReason{
-				Code:     "below_confidence_threshold",
-				Resource: resource,
-				Message:  fmt.Sprintf("recommendation confidence %d is below threshold %d", recommendationConfidence(recommendation), c.MinConfidence),
-			})
-		}
-	}
-
-	if len(selectedResources) == 0 {
-		result.Reasons = append(result.Reasons, applyRecommendationReason{
-			Code:    "not_found",
-			Message: "no applicable recommendations found for the selected workload and container",
+		containerSelections = append(containerSelections, selectedContainerRecommendations{
+			Container:          container,
+			Indexed:            indexedRecommendations,
+			DuplicateResources: duplicateResources,
+			SelectedResources:  selectedResources,
 		})
+
+		for _, resource := range selectedResources {
+			recommendation, ok := indexedRecommendations[resource]
+			if ok {
+				result.Matched = append(result.Matched, applyRecommendationMatch{
+					Container:      container,
+					Resource:       resource,
+					Status:         recommendation.Status,
+					Confidence:     recommendationConfidence(recommendation),
+					OriginalValue:  recommendationLabelText(recommendation, "originalValue"),
+					SuggestedValue: recommendationLabelText(recommendation, "suggestedValue"),
+				})
+			}
+		}
+
+		for _, resource := range selectedResources {
+			if slices.Contains(duplicateResources, resource) {
+				result.Reasons = append(result.Reasons, applyRecommendationReason{
+					Container: container,
+					Code:      "ambiguous",
+					Resource:  resource,
+					Message:   fmt.Sprintf("multiple recommendations matched resource %q", resource),
+				})
+				continue
+			}
+
+			recommendation, ok := indexedRecommendations[resource]
+			if !ok {
+				result.Reasons = append(result.Reasons, applyRecommendationReason{
+					Container: container,
+					Code:      "not_found",
+					Resource:  resource,
+					Message:   fmt.Sprintf("no waiting recommendation found for resource %q", resource),
+				})
+				continue
+			}
+
+			if recommendationConfidence(recommendation) < c.MinConfidence {
+				result.Reasons = append(result.Reasons, applyRecommendationReason{
+					Container: container,
+					Code:      "below_confidence_threshold",
+					Resource:  resource,
+					Message:   fmt.Sprintf("recommendation confidence %d is below threshold %d", recommendationConfidence(recommendation), c.MinConfidence),
+				})
+			}
+		}
+	}
+
+	if len(containerSelections) == 0 {
 		return &commandResultError{exitCode: 1, payload: result}
 	}
 
@@ -201,11 +248,14 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 		return err
 	}
 
-	if !renderedDeploymentExists(renderedManifest, name, c.Namespace, c.Container) {
-		result.Reasons = append(result.Reasons, applyRecommendationReason{
-			Code:    "not_found",
-			Message: "rendered deployment or container was not found in the Helm chart output",
-		})
+	for _, selection := range containerSelections {
+		if !renderedDeploymentExists(renderedManifest, name, c.Namespace, selection.Container) {
+			result.Reasons = append(result.Reasons, applyRecommendationReason{
+				Container: selection.Container,
+				Code:      "not_found",
+				Message:   "rendered deployment or container was not found in the Helm chart output",
+			})
+		}
 	}
 
 	valuesData, err := os.ReadFile(c.ValuesFile) // #nosec G304 -- CLI intentionally reads a user-selected Helm values file.
@@ -218,46 +268,56 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 		return fmt.Errorf("parse values file: %w", err)
 	}
 
-	candidates := findValuesCandidates(&root, name, c.Container)
-	switch len(candidates) {
-	case 0:
-		result.Reasons = append(result.Reasons, applyRecommendationReason{
-			Code:    "not_found",
-			Message: "no explicit values mapping found for the selected workload and container",
-		})
-	case 1:
-	default:
-		result.Reasons = append(result.Reasons, applyRecommendationReason{
-			Code:    "ambiguous",
-			Message: "multiple explicit values mappings matched the selected workload and container",
-		})
+	candidatesByContainer := make(map[string]valuesCandidate, len(containerSelections))
+	for _, selection := range containerSelections {
+		candidates := findValuesCandidates(&root, name, selection.Container)
+		switch len(candidates) {
+		case 0:
+			result.Reasons = append(result.Reasons, applyRecommendationReason{
+				Container: selection.Container,
+				Code:      "not_found",
+				Message:   "no explicit values mapping found for the selected workload and container",
+			})
+		case 1:
+			candidatesByContainer[selection.Container] = candidates[0]
+		default:
+			result.Reasons = append(result.Reasons, applyRecommendationReason{
+				Container: selection.Container,
+				Code:      "ambiguous",
+				Message:   "multiple explicit values mappings matched the selected workload and container",
+			})
+		}
 	}
 
 	if len(result.Reasons) > 0 {
 		return &commandResultError{exitCode: 1, payload: result}
 	}
 
-	candidate := candidates[0]
 	overrideValues := map[string]any{}
-	for _, resource := range selectedResources {
-		recommendation := indexedRecommendations[resource]
-		path, err := setRecommendationValue(candidate.Node, resource, recommendationLabelText(recommendation, "suggestedValue"))
-		if err != nil {
-			result.Reasons = append(result.Reasons, applyRecommendationReason{
-				Code:     "unsupported",
-				Resource: resource,
-				Message:  err.Error(),
-			})
-			continue
-		}
+	for _, selection := range containerSelections {
+		candidate := candidatesByContainer[selection.Container]
+		for _, resource := range selection.SelectedResources {
+			recommendation := selection.Indexed[resource]
+			path, err := setRecommendationValue(candidate.Node, resource, recommendationLabelText(recommendation, "suggestedValue"))
+			if err != nil {
+				result.Reasons = append(result.Reasons, applyRecommendationReason{
+					Container: selection.Container,
+					Code:      "unsupported",
+					Resource:  resource,
+					Message:   err.Error(),
+				})
+				continue
+			}
 
-		appendOverrideValue(overrideValues, candidate.Path, resource, recommendationLabelText(recommendation, "suggestedValue"))
-		result.Patched = append(result.Patched, applyPatchedResource{
-			Resource:       resource,
-			Path:           strings.Join(append(candidate.Path, path...), "."),
-			OriginalValue:  recommendationLabelText(recommendation, "originalValue"),
-			SuggestedValue: recommendationLabelText(recommendation, "suggestedValue"),
-		})
+			appendOverrideValue(overrideValues, candidate.Path, resource, recommendationLabelText(recommendation, "suggestedValue"))
+			result.Patched = append(result.Patched, applyPatchedResource{
+				Container:      selection.Container,
+				Resource:       resource,
+				Path:           strings.Join(append(candidate.Path, path...), "."),
+				OriginalValue:  recommendationLabelText(recommendation, "originalValue"),
+				SuggestedValue: recommendationLabelText(recommendation, "suggestedValue"),
+			})
+		}
 	}
 
 	if len(result.Reasons) > 0 {
@@ -401,7 +461,16 @@ func recommendationEntriesFromMaps(items []map[string]any) []recommendationEntry
 	return recommendations
 }
 
-func filterMatchingRecommendations(recommendations []recommendationEntry, kind, name, namespace, container string) []recommendationEntry {
+type recommendationSelectionError struct {
+	Code    string
+	Message string
+}
+
+func (e recommendationSelectionError) Error() string {
+	return e.Message
+}
+
+func filterWorkloadRecommendations(recommendations []recommendationEntry, kind, name, namespace string) []recommendationEntry {
 	filtered := make([]recommendationEntry, 0, len(recommendations))
 	for _, recommendation := range recommendations {
 		if recommendation.Kind != kind {
@@ -416,12 +485,49 @@ func filterMatchingRecommendations(recommendations []recommendationEntry, kind, 
 		if recommendation.Status != "waiting" {
 			continue
 		}
+		filtered = append(filtered, recommendation)
+	}
+	return filtered
+}
+
+func filterRecommendationsByContainer(recommendations []recommendationEntry, container string) []recommendationEntry {
+	filtered := make([]recommendationEntry, 0, len(recommendations))
+	for _, recommendation := range recommendations {
 		if recommendationLabelText(recommendation, "workloadContainer") != container {
 			continue
 		}
 		filtered = append(filtered, recommendation)
 	}
 	return filtered
+}
+
+func matchedRecommendationContainers(recommendations []recommendationEntry, requestedContainer string) ([]string, error) {
+	if strings.TrimSpace(requestedContainer) != "" {
+		return []string{requestedContainer}, nil
+	}
+
+	containerSet := map[string]struct{}{}
+	for _, recommendation := range recommendations {
+		container := recommendationLabelText(recommendation, "workloadContainer")
+		if container == "" {
+			continue
+		}
+		containerSet[container] = struct{}{}
+	}
+
+	containers := make([]string, 0, len(containerSet))
+	for container := range containerSet {
+		containers = append(containers, container)
+	}
+
+	slices.Sort(containers)
+	if len(containers) == 0 {
+		return nil, recommendationSelectionError{
+			Code:    "not_found",
+			Message: "no applicable recommendations found for the selected workload",
+		}
+	}
+	return containers, nil
 }
 
 func indexRecommendationsByResource(recommendations []recommendationEntry) (map[string]recommendationEntry, []string) {
@@ -555,11 +661,15 @@ func visitValuesCandidates(node *yaml.Node, path []string, name, container strin
 		return
 	}
 
-	if mappingString(node, "name") == name && mappingString(node, "containerName") == container {
-		if resourcesNode := mappingValue(node, "resources"); resourcesNode != nil && resourcesNode.Kind == yaml.MappingNode {
-			candidatePath := append([]string(nil), path...)
-			*candidates = append(*candidates, valuesCandidate{Path: candidatePath, Node: node})
+	if mappingString(node, "name") == name {
+		if mappingString(node, "containerName") == container {
+			if resourcesNode := mappingValue(node, "resources"); resourcesNode != nil && resourcesNode.Kind == yaml.MappingNode {
+				candidatePath := append([]string(nil), path...)
+				*candidates = append(*candidates, valuesCandidate{Path: candidatePath, Node: node})
+			}
 		}
+
+		appendContainerValuesCandidates(node, path, container, candidates)
 	}
 
 	for i := 0; i < len(node.Content); i += 2 {
@@ -567,6 +677,34 @@ func visitValuesCandidates(node *yaml.Node, path []string, name, container strin
 		value := node.Content[i+1]
 		if value.Kind == yaml.MappingNode {
 			visitValuesCandidates(value, append(path, key.Value), name, container, candidates)
+		}
+	}
+}
+
+func appendContainerValuesCandidates(workloadNode *yaml.Node, path []string, container string, candidates *[]valuesCandidate) {
+	containersNode := mappingValue(workloadNode, "containers")
+	if containersNode == nil || containersNode.Kind != yaml.MappingNode {
+		return
+	}
+
+	for i := 0; i < len(containersNode.Content); i += 2 {
+		key := containersNode.Content[i]
+		value := containersNode.Content[i+1]
+		if value.Kind != yaml.MappingNode {
+			continue
+		}
+
+		containerName := mappingString(value, "name")
+		if containerName == "" {
+			containerName = key.Value
+		}
+		if containerName != container {
+			continue
+		}
+
+		if resourcesNode := mappingValue(value, "resources"); resourcesNode != nil && resourcesNode.Kind == yaml.MappingNode {
+			candidatePath := append(append([]string(nil), path...), "containers", key.Value)
+			*candidates = append(*candidates, valuesCandidate{Path: candidatePath, Node: value})
 		}
 	}
 }

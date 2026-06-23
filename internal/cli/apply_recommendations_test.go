@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -38,7 +39,7 @@ func TestApplyRecommendationsDiffDryRunDoesNotMutateValuesFile(t *testing.T) {
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "-        cpu: 100m") || !strings.Contains(stdout.String(), "+        cpu: 20m") {
+	if !strings.Contains(stdout.String(), "-            cpu: 100m") || !strings.Contains(stdout.String(), "+            cpu: 20m") {
 		t.Fatalf("stdout = %q, want unified diff with cpu change", stdout.String())
 	}
 	currentValues, err := os.ReadFile(valuesFile)
@@ -71,7 +72,7 @@ func TestApplyRecommendationsDiffPatchesValuesFile(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "+        memory: 138Mi") {
+	if !strings.Contains(stdout.String(), "+            memory: 138Mi") {
 		t.Fatalf("stdout = %q, want unified diff with memory change", stdout.String())
 	}
 	valuesData, err := os.ReadFile(valuesFile)
@@ -82,6 +83,11 @@ func TestApplyRecommendationsDiffPatchesValuesFile(t *testing.T) {
 	for _, expected := range []string{"cpu: 20m", "memory: 138Mi"} {
 		if !strings.Contains(valuesText, expected) {
 			t.Fatalf("values file = %q, want %q", valuesText, expected)
+		}
+	}
+	for _, expected := range []string{"name: audit-sidecar", "cpu: 5m", "memory: 64Mi"} {
+		if !strings.Contains(valuesText, expected) {
+			t.Fatalf("values file = %q, want unchanged sidecar value %q", valuesText, expected)
 		}
 	}
 }
@@ -120,10 +126,13 @@ func TestApplyRecommendationsOverrideWritesOutputFile(t *testing.T) {
 		t.Fatalf("ReadFile() error = %v", err)
 	}
 	overrideText := string(overrideData)
-	for _, expected := range []string{"kedifyAgent:", "memory: 50Mi", "memory: 150Mi"} {
+	for _, expected := range []string{"kedifyAgent:", "containers:", "manager:", "memory: 50Mi", "memory: 150Mi"} {
 		if !strings.Contains(overrideText, expected) {
 			t.Fatalf("override file = %q, want %q", overrideText, expected)
 		}
+	}
+	if strings.Contains(overrideText, "proxy:") {
+		t.Fatalf("override file = %q, did not expect unrelated sidecar override", overrideText)
 	}
 	if stdout.String() != overrideText {
 		t.Fatalf("stdout = %q, want generated override yaml", stdout.String())
@@ -135,6 +144,254 @@ func TestApplyRecommendationsOverrideWritesOutputFile(t *testing.T) {
 	if string(currentValues) != string(originalValues) {
 		t.Fatalf("values file changed during override output mode")
 	}
+}
+
+func TestApplyRecommendationsJSONReportsContainerScopedPath(t *testing.T) {
+	chartPath, valuesFile := copyTestChart(t)
+	recommendationsFile := testRecommendationsFile(t)
+	originalValues, err := os.ReadFile(valuesFile)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run([]string{
+		"apply", "recommendations", "deployment/keda-operator",
+		"--namespace", "keda",
+		"--container", "keda-operator",
+		"--chart-path", chartPath,
+		"--values-file", valuesFile,
+		"--recommendations-file", recommendationsFile,
+		"--resources", "cpu-requests,memory-limits",
+		"--min-confidence", "20",
+		"--format", "json",
+		"--dry-run",
+	}, bytes.NewBuffer(nil), stdout, stderr)
+
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+
+	var result applyRecommendationsResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
+	}
+	if result.Result != "planned" {
+		t.Fatalf("result = %#v, want planned", result)
+	}
+	if len(result.Patched) != 2 {
+		t.Fatalf("patched = %#v, want two patched resources", result.Patched)
+	}
+
+	gotPaths := make([]string, 0, len(result.Patched))
+	for _, patched := range result.Patched {
+		gotPaths = append(gotPaths, patched.Path)
+	}
+	for _, expected := range []string{
+		"deployments.kedaOperator.containers.operator.resources.requests.cpu",
+		"deployments.kedaOperator.containers.operator.resources.limits.memory",
+	} {
+		if !slices.Contains(gotPaths, expected) {
+			t.Fatalf("patched paths = %#v, want %q", gotPaths, expected)
+		}
+	}
+
+	currentValues, err := os.ReadFile(valuesFile)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(currentValues) != string(originalValues) {
+		t.Fatalf("values file changed during dry-run json mode")
+	}
+}
+
+func TestApplyRecommendationsWithoutContainerAutoResolvesSingleMatchingContainer(t *testing.T) {
+	chartPath, valuesFile := copyTestChart(t)
+	recommendationsFile := testRecommendationsFile(t)
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run([]string{
+		"apply", "recommendations", "deployment/keda-operator-metrics-apiserver",
+		"--namespace", "keda",
+		"--chart-path", chartPath,
+		"--values-file", valuesFile,
+		"--recommendations-file", recommendationsFile,
+		"--resources", "cpu-requests,memory-limits",
+		"--min-confidence", "20",
+		"--format", "json",
+		"--dry-run",
+	}, bytes.NewBuffer(nil), stdout, stderr)
+
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+
+	var result applyRecommendationsResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
+	}
+	if result.Container != "keda-operator-metrics-apiserver" {
+		t.Fatalf("result container = %q, want keda-operator-metrics-apiserver", result.Container)
+	}
+	if !slices.Equal(result.Containers, []string{"keda-operator-metrics-apiserver"}) {
+		t.Fatalf("result containers = %#v, want single matched container", result.Containers)
+	}
+	if result.Result != "planned" {
+		t.Fatalf("result = %#v, want planned", result)
+	}
+}
+
+func TestApplyRecommendationsWithoutContainerPatchesAllMatchedContainers(t *testing.T) {
+	chartPath, valuesFile := copyTestChart(t)
+	recommendationsFile := testRecommendationsFile(t)
+	originalValues, err := os.ReadFile(valuesFile)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run([]string{
+		"apply", "recommendations", "deployment/keda-operator",
+		"--namespace", "keda",
+		"--chart-path", chartPath,
+		"--values-file", valuesFile,
+		"--recommendations-file", recommendationsFile,
+		"--resources", "cpu-requests,memory-limits",
+		"--min-confidence", "20",
+		"--format", "json",
+		"--dry-run",
+	}, bytes.NewBuffer(nil), stdout, stderr)
+
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+
+	var result applyRecommendationsResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
+	}
+	if result.Result != "planned" {
+		t.Fatalf("result = %#v, want planned", result)
+	}
+	if result.Container != "" {
+		t.Fatalf("result container = %q, want empty for multi-container match", result.Container)
+	}
+	if !slices.Equal(result.Containers, []string{"audit-sidecar", "keda-operator"}) {
+		t.Fatalf("result containers = %#v, want both matched containers", result.Containers)
+	}
+	if len(result.Patched) != 4 {
+		t.Fatalf("patched = %#v, want four patched resources", result.Patched)
+	}
+
+	gotPaths := make([]string, 0, len(result.Patched))
+	gotContainers := make([]string, 0, len(result.Patched))
+	for _, patched := range result.Patched {
+		gotPaths = append(gotPaths, patched.Path)
+		gotContainers = append(gotContainers, patched.Container)
+	}
+	for _, expected := range []string{
+		"deployments.kedaOperator.containers.operator.resources.requests.cpu",
+		"deployments.kedaOperator.containers.operator.resources.limits.memory",
+		"deployments.kedaOperator.containers.auditSidecar.resources.requests.cpu",
+		"deployments.kedaOperator.containers.auditSidecar.resources.limits.memory",
+	} {
+		if !slices.Contains(gotPaths, expected) {
+			t.Fatalf("patched paths = %#v, want %q", gotPaths, expected)
+		}
+	}
+	for _, expected := range []string{"audit-sidecar", "keda-operator"} {
+		if !slices.Contains(gotContainers, expected) {
+			t.Fatalf("patched containers = %#v, want %q", gotContainers, expected)
+		}
+	}
+
+	currentValues, err := os.ReadFile(valuesFile)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(currentValues) != string(originalValues) {
+		t.Fatalf("values file changed during dry-run")
+	}
+}
+
+func TestApplyRecommendationsWithoutContainerFailsWhenOneMatchedContainerIsMissingRequestedResource(t *testing.T) {
+	chartPath, valuesFile := copyTestChart(t)
+	recommendationsFile := writeRecommendationsFile(t, []map[string]any{
+		{
+			"kind":        "Deployment",
+			"name":        "keda-operator",
+			"namespace":   "keda",
+			"resourceUID": "keda/deployment/keda-operator/keda-operator/cpu-requests",
+			"status":      "waiting",
+			"labels": map[string]any{
+				"workloadContainer": "keda-operator",
+				"originalValue":     "100m",
+				"suggestedValue":    "20m",
+				"confidence":        80,
+			},
+		},
+		{
+			"kind":        "Deployment",
+			"name":        "keda-operator",
+			"namespace":   "keda",
+			"resourceUID": "keda/deployment/keda-operator/keda-operator/memory-limits",
+			"status":      "waiting",
+			"labels": map[string]any{
+				"workloadContainer": "keda-operator",
+				"originalValue":     "1000Mi",
+				"suggestedValue":    "138Mi",
+				"confidence":        80,
+			},
+		},
+		{
+			"kind":        "Deployment",
+			"name":        "keda-operator",
+			"namespace":   "keda",
+			"resourceUID": "keda/deployment/keda-operator/audit-sidecar/cpu-requests",
+			"status":      "waiting",
+			"labels": map[string]any{
+				"workloadContainer": "audit-sidecar",
+				"originalValue":     "5m",
+				"suggestedValue":    "10m",
+				"confidence":        80,
+			},
+		},
+	})
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run([]string{
+		"apply", "recommendations", "deployment/keda-operator",
+		"--namespace", "keda",
+		"--chart-path", chartPath,
+		"--values-file", valuesFile,
+		"--recommendations-file", recommendationsFile,
+		"--resources", "cpu-requests,memory-limits",
+		"--min-confidence", "20",
+		"--format", "json",
+		"--dry-run",
+	}, bytes.NewBuffer(nil), stdout, stderr)
+
+	if code != 0 {
+		var result applyRecommendationsResult
+		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+			t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
+		}
+		if !containsReasonCode(result.Reasons, "not_found") {
+			t.Fatalf("reasons = %#v, want not_found", result.Reasons)
+		}
+		if !strings.Contains(stdout.String(), "audit-sidecar") || !strings.Contains(stdout.String(), "memory-limits") {
+			t.Fatalf("stdout = %q, want failing container and resource details", stdout.String())
+		}
+		return
+	}
+	t.Fatalf("Run() exit code = %d, want non-zero", code)
 }
 
 func TestApplyRecommendationsFailsBelowConfidenceThreshold(t *testing.T) {
@@ -306,6 +563,21 @@ func testRecommendationsFile(t *testing.T) string {
 	path, err := filepath.Abs("../../test/recommendations.json")
 	if err != nil {
 		t.Fatalf("Abs() error = %v", err)
+	}
+	return path
+}
+
+func writeRecommendationsFile(t *testing.T, items []map[string]any) string {
+	t.Helper()
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "recommendations.json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
 	}
 	return path
 }

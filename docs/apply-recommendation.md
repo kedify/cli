@@ -10,8 +10,8 @@ For v1, the CLI will:
 
 - discover available recommendations through `kedify list recommendations`
 - apply recommendations to Helm values only
-- target one workload and one container per invocation
-- update up to four resource settings in a single run
+- target one workload and one or more matched containers per invocation
+- update up to four resource settings per matched container in a single run
 - produce machine-readable output and patch artifacts suitable for CI
 
 PR creation is out of scope for the CLI itself. CI can open a PR separately, for example by using `gh`.
@@ -23,10 +23,10 @@ The new command is:
 ```bash
 kedify apply recommendations deployment/<NAME> \
   --namespace <NAMESPACE> \
-  --container <CONTAINER> \
   --chart-path <PATH> \
   --values-file <PATH> \
   --recommendations-file <PATH> \
+  [--container <CONTAINER>] \
   [--resources cpu-requests,cpu-limits,memory-requests,memory-limits] \
   [--min-confidence 60] \
   [--format diff|override|json] \
@@ -38,7 +38,7 @@ Notes:
 - `recommendations` is plural
 - the positional target uses workload kind and workload name, for example `deployment/my-app`
 - `--namespace` is required
-- `--container` is required
+- `--container` is optional
 - `--chart-path` is required in Helm mode
 - `--values-file` is required in Helm mode
 - `--resources` is optional
@@ -58,9 +58,9 @@ The `--resources` flag accepts a comma-separated list:
 --resources cpu-requests,cpu-limits
 ```
 
-If `--resources` is omitted, the CLI should apply all recommendations available for the selected workload and container.
+If `--resources` is omitted, the CLI should apply all recommendations available for each matched container in the selected workload.
 
-At most four recommendations can be applied in one invocation, one for each supported resource identifier.
+At most four recommendations can be applied per matched container in one invocation, one for each supported resource identifier.
 
 ## Recommendation Sources
 
@@ -68,6 +68,13 @@ In v1, the command reads recommendations from a local JSON or YAML file provided
 Fetching recommendations directly from the Kedify API is planned, but not implemented yet.
 
 Only recommendations with status `waiting` are considered applicable.
+
+When `--container` is omitted, the CLI should:
+
+- inspect waiting recommendations for the selected workload
+- match all containers that have waiting recommendations for the selected workload
+- require every matched container to be safely patchable for the requested resources
+- fail the whole run with structured reasons when any matched container cannot be patched safely
 
 ## Confidence Threshold
 
@@ -107,14 +114,15 @@ The CLI should:
 
 - render the Helm chart using `--chart-path` and `--values-file`
 - find the rendered workload matching the requested kind, name, and namespace
-- find the matching container by explicit container name
+- find the matching container by explicit container name when provided, or match all recommendation-bearing containers when omitted
 - scan templates and values usage for matching container resource blocks
 
 Rules:
 
 - patch only when container mapping is explicit
 - do not guess when multiple possible mappings exist
-- fail when the recommendation cannot be mapped safely to the values file
+- when multiple containers are matched, patch all of them only if every container can be mapped safely
+- fail when any matched recommendation cannot be mapped safely to the values file
 
 ## Ambiguity and Safety
 

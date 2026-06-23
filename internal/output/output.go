@@ -146,11 +146,12 @@ func renderRecommendationListText(recommendations []map[string]any) []byte {
 
 	grouped := groupRecommendations(recommendations)
 	rows := make([][]string, 0, len(grouped)+1)
-	rows = append(rows, []string{"KIND", "NAME", "NAMESPACE", "CPU REQUESTS", "CPU LIMITS", "MEMORY REQUESTS", "MEMORY LIMITS"})
+	rows = append(rows, []string{"KIND", "CONTAINER", "NAME", "NAMESPACE", "CPU REQUESTS", "CPU LIMITS", "MEMORY REQUESTS", "MEMORY LIMITS"})
 
 	for _, recommendation := range grouped {
 		rows = append(rows, []string{
 			recommendation.kind,
+			recommendation.container,
 			recommendation.name,
 			recommendation.namespace,
 			recommendation.cpuRequests,
@@ -361,6 +362,7 @@ func recommendationLabelText(recommendation map[string]any, key string) string {
 
 type recommendationRow struct {
 	kind           string
+	container      string
 	name           string
 	namespace      string
 	cpuRequests    string
@@ -379,6 +381,7 @@ func groupRecommendations(recommendations []map[string]any) []recommendationRow 
 		if !ok {
 			row = &recommendationRow{
 				kind:      textValue(recommendation["kind"]),
+				container: recommendationLabelText(recommendation, "workloadContainer"),
 				name:      textValue(recommendation["name"]),
 				namespace: textValue(recommendation["namespace"]),
 			}

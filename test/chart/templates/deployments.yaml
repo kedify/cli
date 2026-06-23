@@ -77,10 +77,12 @@ spec:
         app.kubernetes.io/name: {{ .Values.deployments.kedaOperator.name }}
     spec:
       containers:
-        - name: {{ .Values.deployments.kedaOperator.containerName }}
-          image: {{ .Values.deployments.kedaOperator.image }}
+{{- range $container := .Values.deployments.kedaOperator.containers }}
+        - name: {{ $container.name }}
+          image: {{ $container.image }}
           resources:
-{{ toYaml .Values.deployments.kedaOperator.resources | indent 12 }}
+{{ toYaml $container.resources | indent 12 }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -119,7 +121,9 @@ spec:
         app.kubernetes.io/name: {{ .Values.deployments.kedifyAgent.name }}
     spec:
       containers:
-        - name: {{ .Values.deployments.kedifyAgent.containerName }}
-          image: {{ .Values.deployments.kedifyAgent.image }}
+{{- range $container := .Values.deployments.kedifyAgent.containers }}
+        - name: {{ $container.name }}
+          image: {{ $container.image }}
           resources:
-{{ toYaml .Values.deployments.kedifyAgent.resources | indent 12 }}
+{{ toYaml $container.resources | indent 12 }}
+{{- end }}

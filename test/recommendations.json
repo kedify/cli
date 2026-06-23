@@ -93,6 +93,29 @@
   },
   {
     "clusterId": "ecf6a4d3-fc2c-403b-b70c-6de243ddfbbb",
+    "date": "2026-06-18T12:06:54.141000Z",
+    "hint": "The value was calculated as suggested value for cpu requests * ${limitsToRequestsRatio} - '10.00' x '5.0'",
+    "id": "7d8825df-6af0-40d8-a824-25b8132b6b90",
+    "kind": "Deployment",
+    "labels": {
+      "confidence": 20,
+      "intervalHours": 4,
+      "kubectlCmd": "kubectl set resources deployment keda-operator -c audit-sidecar -n keda --limits=cpu=50m",
+      "originalValue": "25m",
+      "originalValueRaw": 25,
+      "query": "1000 * max by(namespace, workloadKind, workloadName, container) (container_cpu_limits{kedify_agent_id=\"%s\"})",
+      "suggestedValue": "50m",
+      "suggestedValueRaw": 50,
+      "workloadContainer": "audit-sidecar",
+      "workloadName": "keda-operator"
+    },
+    "name": "keda-operator",
+    "namespace": "keda",
+    "resourceUID": "keda/deployment/keda-operator/audit-sidecar/cpu-limits",
+    "status": "waiting"
+  },
+  {
+    "clusterId": "ecf6a4d3-fc2c-403b-b70c-6de243ddfbbb",
     "date": "2026-06-18T12:06:54.139061Z",
     "hint": "The value was calculated as suggested value for cpu requests * ${limitsToRequestsRatio} - '20.00' x '5.0'",
     "id": "45e7eb1e-d335-462b-8d72-441369d78aea",
@@ -208,6 +231,29 @@
   },
   {
     "clusterId": "ecf6a4d3-fc2c-403b-b70c-6de243ddfbbb",
+    "date": "2026-06-18T12:06:54.120000Z",
+    "hint": "This value represents the p95 reported cpu consumption (in millicores) for last 4 hours multiplied by ${headroomCoefficient}, which is equal to '3.00'.",
+    "id": "dfb34d4b-c442-46c6-8b1d-91c72fae0139",
+    "kind": "Deployment",
+    "labels": {
+      "confidence": 20,
+      "intervalHours": 4,
+      "kubectlCmd": "kubectl set resources deployment keda-operator -c audit-sidecar -n keda --requests=cpu=10m",
+      "originalValue": "5m",
+      "originalValueRaw": 5,
+      "query": "1000 * quantile_over_time(0.95, max by(namespace, workloadKind, workloadName, container) (container_cpu_usage{kedify_agent_id=\"b99434c7-7bfa-485f-8571-47026717b9b4\"})[4h:4h]) * 3",
+      "suggestedValue": "10m",
+      "suggestedValueRaw": 10,
+      "workloadContainer": "audit-sidecar",
+      "workloadName": "keda-operator"
+    },
+    "name": "keda-operator",
+    "namespace": "keda",
+    "resourceUID": "keda/deployment/keda-operator/audit-sidecar/cpu-requests",
+    "status": "waiting"
+  },
+  {
+    "clusterId": "ecf6a4d3-fc2c-403b-b70c-6de243ddfbbb",
     "date": "2026-06-18T12:06:54.117456Z",
     "hint": "This value represents the p95 reported cpu consumption (in millicores) for last 4 hours multiplied by ${headroomCoefficient}, which is equal to '3.00'. However, in this case the p95 measured value was smaller than the minimum threshold so we are using the min value: '20m'",
     "id": "b263593d-1147-48ea-a1c3-395e2a404800",
@@ -296,6 +342,29 @@
     "name": "keda-operator",
     "namespace": "keda",
     "resourceUID": "keda/deployment/keda-operator/keda-operator/memory-limits",
+    "status": "waiting"
+  },
+  {
+    "clusterId": "ecf6a4d3-fc2c-403b-b70c-6de243ddfbbb",
+    "date": "2026-06-18T12:06:54.088000Z",
+    "hint": "The value was calculated as suggested value for memory requests * ${limitsToRequestsRatio} - '24Mi' x '3.0'",
+    "id": "88e314db-a95c-4a89-b5af-1935c46cd59e",
+    "kind": "Deployment",
+    "labels": {
+      "confidence": 20,
+      "intervalHours": 4,
+      "kubectlCmd": "kubectl set resources deployment keda-operator -c audit-sidecar -n keda --limits=memory=72Mi",
+      "originalValue": "64Mi",
+      "originalValueRaw": 67108864,
+      "query": "max by(namespace, workloadKind, workloadName, container) (container_memory_requests{kedify_agent_id=\"%s\"})",
+      "suggestedValue": "72Mi",
+      "suggestedValueRaw": 75497472,
+      "workloadContainer": "audit-sidecar",
+      "workloadName": "keda-operator"
+    },
+    "name": "keda-operator",
+    "namespace": "keda",
+    "resourceUID": "keda/deployment/keda-operator/audit-sidecar/memory-limits",
     "status": "waiting"
   },
   {
@@ -434,6 +503,29 @@
     "name": "keda-operator",
     "namespace": "keda",
     "resourceUID": "keda/deployment/keda-operator/keda-operator/memory-requests",
+    "status": "waiting"
+  },
+  {
+    "clusterId": "ecf6a4d3-fc2c-403b-b70c-6de243ddfbbb",
+    "date": "2026-06-18T12:06:54.064000Z",
+    "hint": "This value represents the maximum reported memory consumption for last 4 hours multiplied by ${headroomCoefficient}, which is equal to '1.20'.",
+    "id": "4ec76428-a26a-4271-99d0-3a639f0e2ab2",
+    "kind": "Deployment",
+    "labels": {
+      "confidence": 20,
+      "intervalHours": 4,
+      "kubectlCmd": "kubectl set resources deployment keda-operator -c audit-sidecar -n keda --requests=memory=24Mi",
+      "originalValue": "16Mi",
+      "originalValueRaw": 16777216,
+      "query": "max_over_time(max by(namespace, workloadKind, workloadName, container) (container_memory_usage{kedify_agent_id=\"b99434c7-7bfa-485f-8571-47026717b9b4\"})[4h:4h]) * 1.2",
+      "suggestedValue": "24Mi",
+      "suggestedValueRaw": 25165824,
+      "workloadContainer": "audit-sidecar",
+      "workloadName": "keda-operator"
+    },
+    "name": "keda-operator",
+    "namespace": "keda",
+    "resourceUID": "keda/deployment/keda-operator/audit-sidecar/memory-requests",
     "status": "waiting"
   },
   {
