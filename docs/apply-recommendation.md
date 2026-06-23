@@ -235,3 +235,21 @@ After Helm v1, the same recommendation model should eventually support broader K
 - plain YAML manifests
 - Kustomize-based repositories
 - additional workload kinds such as Jobs or StatefulSets when patching support is implemented
+
+## Next Task
+
+The next implementation task after the current Deployment-only v1 is to broaden supported workload kinds for `kedify apply recommendations`.
+
+The first candidates are:
+
+- `statefulset`
+- `job`
+- `cronjob`
+- `daemonset`
+
+The immediate follow-up should be:
+
+- replace the hardcoded Deployment-only target check with a supported workload-kind list or switch-based dispatcher
+- keep the same targeting model of kind, name, namespace, and container
+- extend Helm render verification and values mapping logic to these additional workload kinds one by one
+- continue to fail with a structured `unsupported` result for kinds that are not yet implemented
