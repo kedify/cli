@@ -54,6 +54,7 @@ brews:
   - name: kedify
     ids:
       - kedify
+    skip_upload: "{{ .IsSnapshot }}"
     repository:
       owner: kedify
       name: homebrew-tap
