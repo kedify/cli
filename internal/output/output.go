@@ -64,6 +64,11 @@ func renderText(value any) ([]byte, error) {
 		}
 		return yaml.Marshal(v)
 	case []map[string]any:
+		// An empty list is ambiguous (could be clusters, recommendations, or something else),
+		// so fall back to YAML to avoid misleading "No clusters found" output.
+		if len(v) == 0 {
+			return yaml.Marshal(v)
+		}
 		if looksLikeClusterList(v) {
 			return renderClusterListText(v), nil
 		}

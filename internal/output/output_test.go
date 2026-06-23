@@ -159,6 +159,23 @@ func TestWriteTextNonClusterListFallsBackToYAML(t *testing.T) {
 	}
 }
 
+func TestWriteTextEmptyMapListFallsBackToYAML(t *testing.T) {
+	var out bytes.Buffer
+	value := []map[string]any{}
+
+	if err := Write(&out, value, "text"); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	got := out.String()
+	if got != "[]\n" {
+		t.Fatalf("output = %q, want YAML empty list", got)
+	}
+	if strings.Contains(got, "No clusters found.") {
+		t.Fatalf("unexpected cluster-specific output: %q", got)
+	}
+}
+
 func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 	var out bytes.Buffer
 	value := []any{

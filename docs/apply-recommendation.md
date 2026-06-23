@@ -64,20 +64,8 @@ At most four recommendations can be applied in one invocation, one for each supp
 
 ## Recommendation Sources
 
-The command can consume recommendations from two sources:
-
-1. Live Kedify API
-2. A previously saved recommendations file
-
-When `--recommendations-file` is provided, the command should read recommendations from that file instead of fetching them from the API.
-
-When no file is provided, the command should internally fetch recommendations in the same spirit as `kedify list recommendations` and then identify the selected recommendation by:
-
-- workload kind
-- workload name
-- namespace
-- container
-- resource type
+In v1, the command reads recommendations from a local JSON or YAML file provided via `--recommendations-file`.
+Fetching recommendations directly from the Kedify API is planned, but not implemented yet.
 
 Only recommendations with status `waiting` are considered applicable.
 

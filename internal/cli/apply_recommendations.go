@@ -369,7 +369,7 @@ func loadRecommendationsFile(path string) ([]recommendationEntry, error) {
 	}
 
 	var list []map[string]any
-	if err := yaml.Unmarshal(data, &list); err == nil && len(list) > 0 {
+	if err := yaml.Unmarshal(data, &list); err == nil {
 		return recommendationEntriesFromMaps(list), nil
 	}
 
@@ -662,10 +662,15 @@ func overrideLeaf(root map[string]any, path []string, value string) {
 }
 
 func marshalYAMLNode(root *yaml.Node) ([]byte, error) {
+	nodeToEncode := root
+	if root != nil && root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		nodeToEncode = root.Content[0]
+	}
+
 	var buf bytes.Buffer
 	encoder := yaml.NewEncoder(&buf)
 	encoder.SetIndent(2)
-	if err := encoder.Encode(root); err != nil {
+	if err := encoder.Encode(nodeToEncode); err != nil {
 		_ = encoder.Close()
 		return nil, fmt.Errorf("marshal values file: %w", err)
 	}
