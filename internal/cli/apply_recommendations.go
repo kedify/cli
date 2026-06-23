@@ -243,7 +243,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 		return &commandResultError{exitCode: 1, payload: result}
 	}
 
-	renderedManifest, err := renderHelmChart(c.ChartPath, c.ValuesFile)
+	renderedManifest, err := renderHelmChart(c.ChartPath, c.ValuesFile, c.Namespace)
 	if err != nil {
 		return err
 	}
@@ -599,11 +599,11 @@ func recommendationLabelText(recommendation recommendationEntry, key string) str
 	return textValue(recommendation.Labels[key])
 }
 
-func renderHelmChart(chartPath, valuesFile string) ([]byte, error) {
+func renderHelmChart(chartPath, valuesFile, namespace string) ([]byte, error) {
 	if _, err := exec.LookPath("helm"); err != nil {
 		return nil, fmt.Errorf("render helm chart: helm not found in PATH")
 	}
-	cmd := exec.Command("helm", "template", "kedify-apply", chartPath, "--values", valuesFile) // #nosec G204 -- executable is fixed; args are explicit CLI inputs for local Helm rendering.
+	cmd := exec.Command("helm", "template", "kedify-apply", chartPath, "--namespace", namespace, "--values", valuesFile) // #nosec G204 -- executable is fixed; args are explicit CLI inputs for local Helm rendering.
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("render helm chart: %w: %s", err, strings.TrimSpace(string(output)))

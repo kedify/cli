@@ -509,6 +509,89 @@ duplicates:
 	}
 }
 
+func TestApplyRecommendationsPassesNamespaceToHelmTemplate(t *testing.T) {
+	chartPath := filepath.Join(t.TempDir(), "chart")
+	valuesFile := filepath.Join(chartPath, "values.yaml")
+	recommendationsFile := writeRecommendationsFile(t, []map[string]any{
+		{
+			"kind":        "Deployment",
+			"name":        "demo",
+			"namespace":   "custom-ns",
+			"resourceUID": "custom-ns/deployment/demo/demo/cpu-requests",
+			"status":      "waiting",
+			"labels": map[string]any{
+				"workloadContainer": "demo",
+				"originalValue":     "100m",
+				"suggestedValue":    "200m",
+				"confidence":        80,
+			},
+		},
+	})
+
+	writeTestChartFiles(t, chartPath, map[string]string{
+		"Chart.yaml": "apiVersion: v2\nname: namespace-test\nversion: 0.1.0\n",
+		"values.yaml": `deployment:
+  name: demo
+  containerName: demo
+  resources:
+    requests:
+      cpu: 100m
+`,
+		"templates/deployment.yaml": `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Values.deployment.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.deployment.name }}
+    spec:
+      containers:
+        - name: {{ .Values.deployment.containerName }}
+          image: registry.k8s.io/pause:3.10
+          resources:
+{{ toYaml .Values.deployment.resources | indent 12 }}
+`,
+	})
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	code := Run([]string{
+		"apply", "recommendations", "deployment/demo",
+		"--namespace", "custom-ns",
+		"--chart-path", chartPath,
+		"--values-file", valuesFile,
+		"--recommendations-file", recommendationsFile,
+		"--resources", "cpu-requests",
+		"--min-confidence", "20",
+		"--format", "json",
+		"--dry-run",
+	}, bytes.NewBuffer(nil), stdout, stderr)
+
+	if code != 0 {
+		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+
+	var result applyRecommendationsResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
+	}
+	if result.Result != "planned" {
+		t.Fatalf("result = %#v, want planned", result)
+	}
+	if len(result.Reasons) != 0 {
+		t.Fatalf("reasons = %#v, want empty", result.Reasons)
+	}
+}
+
 func copyTestChart(t *testing.T) (string, string) {
 	t.Helper()
 
@@ -580,6 +663,20 @@ func writeRecommendationsFile(t *testing.T, items []map[string]any) string {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	return path
+}
+
+func writeTestChartFiles(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+
+	for relativePath, content := range files {
+		path := filepath.Join(root, relativePath)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+	}
 }
 
 func containsReasonCode(reasons []applyRecommendationReason, code string) bool {

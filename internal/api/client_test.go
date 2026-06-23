@@ -90,7 +90,9 @@ func TestGetClusterCallsDedicatedEndpoint(t *testing.T) {
 }
 
 func TestGetRecommendationsCallsDedicatedEndpoint(t *testing.T) {
+	requests := 0
 	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		requests++
 		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596/recommendations" {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
@@ -111,6 +113,9 @@ func TestGetRecommendationsCallsDedicatedEndpoint(t *testing.T) {
 	items, ok := recommendations.([]any)
 	if !ok || len(items) != 1 {
 		t.Fatalf("recommendations = %#v", recommendations)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
 	}
 }
 
@@ -156,7 +161,9 @@ func TestGetRecommendationsReadsAllPages(t *testing.T) {
 }
 
 func TestGetRecommendationsFallsBackToNonPaginatedPayload(t *testing.T) {
+	requests := 0
 	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		requests++
 		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596/recommendations" {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
@@ -177,5 +184,8 @@ func TestGetRecommendationsFallsBackToNonPaginatedPayload(t *testing.T) {
 	payload, ok := recommendations.(map[string]any)
 	if !ok || payload["summary"] == nil {
 		t.Fatalf("recommendations = %#v", recommendations)
+	}
+	if requests != 1 {
+		t.Fatalf("requests = %d, want 1", requests)
 	}
 }

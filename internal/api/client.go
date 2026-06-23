@@ -19,6 +19,18 @@ type Client struct {
 	httpClient *http.Client
 }
 
+type nonPaginatedPayloadError struct {
+	payload any
+}
+
+func (e *nonPaginatedPayloadError) Error() string {
+	return errNotPaginated.Error()
+}
+
+func (e *nonPaginatedPayloadError) Unwrap() error {
+	return errNotPaginated
+}
+
 type paginatedResponse struct {
 	Items    []any    `json:"items"`
 	PageInfo pageInfo `json:"pageInfo"`
@@ -69,16 +81,12 @@ func (c *Client) GetRecommendations(apiURL, token, clusterID string) (any, error
 	if err == nil {
 		return items, nil
 	}
-	if !errors.Is(err, errNotPaginated) {
-		return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
-	}
 
-	var payload any
-	if err := c.getJSON(apiURL, token, path, &payload); err != nil {
-		return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
+	var payloadErr *nonPaginatedPayloadError
+	if errors.As(err, &payloadErr) {
+		return payloadErr.payload, nil
 	}
-
-	return payload, nil
+	return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
 }
 
 func (c *Client) listPaginatedItems(apiURL, token, path string) ([]any, error) {
@@ -142,7 +150,11 @@ func (c *Client) listPage(apiURL, token, path string, page int) (paginatedRespon
 
 	trimmedBody := strings.TrimSpace(string(body))
 	if strings.HasPrefix(trimmedBody, "[") {
-		return paginatedResponse{}, errNotPaginated
+		var payload []any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return paginatedResponse{}, fmt.Errorf("parse response as json: %w", err)
+		}
+		return paginatedResponse{}, &nonPaginatedPayloadError{payload: payload}
 	}
 
 	var payload paginatedResponse
@@ -151,7 +163,11 @@ func (c *Client) listPage(apiURL, token, path string, page int) (paginatedRespon
 	}
 
 	if payload.Items == nil || payload.PageInfo.Page == 0 {
-		return paginatedResponse{}, errNotPaginated
+		var rawPayload any
+		if err := json.Unmarshal(body, &rawPayload); err != nil {
+			return paginatedResponse{}, fmt.Errorf("parse response as json: %w", err)
+		}
+		return paginatedResponse{}, &nonPaginatedPayloadError{payload: rawPayload}
 	}
 
 	return payload, nil
