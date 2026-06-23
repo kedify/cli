@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,13 +13,27 @@ import (
 
 const requestTimeout = 30 * time.Second
 
+var errNotPaginated = errors.New("response is not paginated")
+
 type Client struct {
 	httpClient *http.Client
 }
 
-type clustersResponse struct {
-	Items    []map[string]any `json:"items"`
-	PageInfo pageInfo         `json:"pageInfo"`
+type nonPaginatedPayloadError struct {
+	payload any
+}
+
+func (e *nonPaginatedPayloadError) Error() string {
+	return errNotPaginated.Error()
+}
+
+func (e *nonPaginatedPayloadError) Unwrap() error {
+	return errNotPaginated
+}
+
+type paginatedResponse struct {
+	Items    []any    `json:"items"`
+	PageInfo pageInfo `json:"pageInfo"`
 }
 
 type pageInfo struct {
@@ -33,11 +48,53 @@ func NewClient() *Client {
 }
 
 func (c *Client) ListClusters(apiURL, token string) ([]map[string]any, error) {
-	var allItems []map[string]any
+	items, err := c.listPaginatedItems(apiURL, token, "/clusters")
+	if err != nil {
+		return nil, err
+	}
+
+	clusters := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		cluster, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("parse response items: unexpected item type %T", item)
+		}
+		clusters = append(clusters, cluster)
+	}
+
+	return clusters, nil
+}
+
+func (c *Client) GetCluster(apiURL, token, clusterID string) (map[string]any, error) {
+	var payload map[string]any
+	if err := c.getJSON(apiURL, token, "/clusters/"+url.PathEscape(clusterID), &payload); err != nil {
+		return nil, fmt.Errorf("request cluster %s: %w", clusterID, err)
+	}
+
+	return payload, nil
+}
+
+func (c *Client) GetRecommendations(apiURL, token, clusterID string) (any, error) {
+	path := "/clusters/" + url.PathEscape(clusterID) + "/recommendations"
+
+	items, err := c.listPaginatedItems(apiURL, token, path)
+	if err == nil {
+		return items, nil
+	}
+
+	var payloadErr *nonPaginatedPayloadError
+	if errors.As(err, &payloadErr) {
+		return payloadErr.payload, nil
+	}
+	return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
+}
+
+func (c *Client) listPaginatedItems(apiURL, token, path string) ([]any, error) {
+	var allItems []any
 	page := 1
 
 	for {
-		response, err := c.listClustersPage(apiURL, token, page)
+		response, err := c.listPage(apiURL, token, path, page)
 		if err != nil {
 			return nil, err
 		}
@@ -57,43 +114,10 @@ func (c *Client) ListClusters(apiURL, token string) ([]map[string]any, error) {
 	return allItems, nil
 }
 
-func (c *Client) GetCluster(apiURL, token, clusterID string) (map[string]any, error) {
-	requestURL := strings.TrimRight(apiURL, "/") + "/clusters/" + url.PathEscape(clusterID)
-
-	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+func (c *Client) listPage(apiURL, token, path string, page int) (paginatedResponse, error) {
+	requestURL, err := url.Parse(strings.TrimRight(apiURL, "/") + path)
 	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request cluster %s: %w", clusterID, err)
-	}
-
-	body, err := readResponseBody(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, fmt.Errorf("parse response as json: %w", err)
-	}
-
-	return payload, nil
-}
-
-func (c *Client) listClustersPage(apiURL, token string, page int) (clustersResponse, error) {
-	requestURL, err := url.Parse(strings.TrimRight(apiURL, "/") + "/clusters")
-	if err != nil {
-		return clustersResponse{}, fmt.Errorf("build request url: %w", err)
+		return paginatedResponse{}, fmt.Errorf("build request url: %w", err)
 	}
 
 	if page > 1 {
@@ -104,7 +128,7 @@ func (c *Client) listClustersPage(apiURL, token string, page int) (clustersRespo
 
 	req, err := http.NewRequest(http.MethodGet, requestURL.String(), nil)
 	if err != nil {
-		return clustersResponse{}, fmt.Errorf("build request: %w", err)
+		return paginatedResponse{}, fmt.Errorf("build request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -112,21 +136,38 @@ func (c *Client) listClustersPage(apiURL, token string, page int) (clustersRespo
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return clustersResponse{}, fmt.Errorf("request clusters page %d: %w", page, err)
+		return paginatedResponse{}, fmt.Errorf("request page %d for %s: %w", page, path, err)
 	}
 
 	body, err := readResponseBody(resp)
 	if err != nil {
-		return clustersResponse{}, err
+		return paginatedResponse{}, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return clustersResponse{}, fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return paginatedResponse{}, fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
-	var payload clustersResponse
+	trimmedBody := strings.TrimSpace(string(body))
+	if strings.HasPrefix(trimmedBody, "[") {
+		var payload []any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return paginatedResponse{}, fmt.Errorf("parse response as json: %w", err)
+		}
+		return paginatedResponse{}, &nonPaginatedPayloadError{payload: payload}
+	}
+
+	var payload paginatedResponse
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return clustersResponse{}, fmt.Errorf("parse response as json: %w", err)
+		return paginatedResponse{}, fmt.Errorf("parse response as json: %w", err)
+	}
+
+	if payload.Items == nil || payload.PageInfo.Page == 0 {
+		var rawPayload any
+		if err := json.Unmarshal(body, &rawPayload); err != nil {
+			return paginatedResponse{}, fmt.Errorf("parse response as json: %w", err)
+		}
+		return paginatedResponse{}, &nonPaginatedPayloadError{payload: rawPayload}
 	}
 
 	return payload, nil
@@ -144,4 +185,36 @@ func readResponseBody(resp *http.Response) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+func (c *Client) getJSON(apiURL, token, path string, target any) error {
+	requestURL := strings.TrimRight(apiURL, "/") + path
+
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	body, err := readResponseBody(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+
+	if err := json.Unmarshal(body, target); err != nil {
+		return fmt.Errorf("parse response as json: %w", err)
+	}
+
+	return nil
 }
