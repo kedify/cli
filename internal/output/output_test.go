@@ -238,7 +238,7 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	var items []any
 
-	data, err := os.ReadFile("../../recommendations.json")
+	data, err := os.ReadFile("../../test/recommendations.json")
 	if err != nil {
 		t.Fatalf("ReadFile() error = %v", err)
 	}

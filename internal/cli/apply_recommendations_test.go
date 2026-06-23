@@ -303,7 +303,7 @@ func copyDir(t *testing.T, source, target string) {
 func testRecommendationsFile(t *testing.T) string {
 	t.Helper()
 
-	path, err := filepath.Abs("../../recommendations.json")
+	path, err := filepath.Abs("../../test/recommendations.json")
 	if err != nil {
 		t.Fatalf("Abs() error = %v", err)
 	}

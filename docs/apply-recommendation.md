@@ -26,8 +26,8 @@ kedify apply recommendations deployment/<NAME> \
   --container <CONTAINER> \
   --chart-path <PATH> \
   --values-file <PATH> \
+  --recommendations-file <PATH> \
   [--resources cpu-requests,cpu-limits,memory-requests,memory-limits] \
-  [--recommendations-file <PATH>] \
   [--min-confidence 60] \
   [--format diff|override|json] \
   [--dry-run]
