@@ -341,14 +341,12 @@ func looksLikeCluster(value map[string]any) bool {
 }
 
 func looksLikeRecommendation(value map[string]any) bool {
-	_, hasName := value["name"]
-	_, hasNamespace := value["namespace"]
 	_, hasResourceUID := value["resourceUID"]
 	labels, _ := value["labels"].(map[string]any)
 	_, hasOriginalValue := labels["originalValue"]
 	_, hasSuggestedValue := labels["suggestedValue"]
 
-	return hasResourceUID || hasOriginalValue || hasSuggestedValue || hasName || hasNamespace
+	return hasResourceUID || hasOriginalValue || hasSuggestedValue
 }
 
 func recommendationLabelText(recommendation map[string]any, key string) string {

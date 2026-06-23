@@ -159,6 +159,31 @@ func TestWriteTextNonClusterListFallsBackToYAML(t *testing.T) {
 	}
 }
 
+func TestWriteTextGenericNameNamespaceListFallsBackToYAML(t *testing.T) {
+	var out bytes.Buffer
+	value := []map[string]any{
+		{
+			"name":      "demo",
+			"namespace": "default",
+			"replicas":  3,
+		},
+	}
+
+	if err := Write(&out, value, "text"); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	got := out.String()
+	if strings.Contains(got, "CPU REQUESTS") || strings.Contains(got, "MEMORY LIMITS") {
+		t.Fatalf("unexpected recommendations table output: %q", got)
+	}
+	for _, expected := range []string{"- name: demo", "namespace: default", "replicas: 3"} {
+		if !strings.Contains(got, expected) {
+			t.Fatalf("expected %q in output %q", expected, got)
+		}
+	}
+}
+
 func TestWriteTextEmptyMapListFallsBackToYAML(t *testing.T) {
 	var out bytes.Buffer
 	value := []map[string]any{}
