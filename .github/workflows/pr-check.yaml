@@ -31,7 +31,7 @@ jobs:
 
       - name: Install vulncheck
         run: |
-          if ! command -v govulncheck; then
+          if ! command -v govulncheck >/dev/null 2>&1; then
             echo "govulncheck not found, installing..."
             go install golang.org/x/vuln/cmd/govulncheck@v1.4.0
           fi
