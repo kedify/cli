@@ -13,7 +13,89 @@ permissions:
 
 jobs:
   pr-check:
-    uses: kedify/github-meta/.github/workflows/go-pr-check.yaml@main
-    with:
-      skip_private_key_setup: true
-      continue_on_error: false
+    name: Run PR Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install vulncheck
+        run: |
+          if ! command -v govulncheck >/dev/null 2>&1; then
+            echo "govulncheck not found, installing..."
+            go install golang.org/x/vuln/cmd/govulncheck@v1.4.0
+          fi
+
+      - name: Verify dependencies
+        run: |
+          set -euo pipefail
+          go mod verify
+          go mod tidy
+          gofmt -s -w .
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "dirty repository"
+            git status
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9.2.1
+        with:
+          version: v2.12.2
+          args: --timeout=10m
+
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "v0.6.1"
+
+      - name: Run vulncheck
+        run: |
+          echo -e "### vulncheck\n\n" >> ${GITHUB_STEP_SUMMARY}
+          echo '```' >> ${GITHUB_STEP_SUMMARY}
+          (govulncheck ./... || true) | tee -a ${GITHUB_STEP_SUMMARY}
+          echo '```' >> ${GITHUB_STEP_SUMMARY}
+
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@v2.24.7
+        with:
+          args: '-no-fail -fmt sarif -out results.sarif ./...'
+
+      - name: Normalize SARIF for GitHub upload
+        run: |
+          jq '
+            (.runs[]?.tool.driver.rules[]?) |=
+              (if has("relationships") then
+                if (.relationships | type) == "array" then
+                  .relationships |= map(select(type == "object"))
+                else
+                  del(.relationships)
+                end
+              else
+                .
+              end)
+          ' results.sarif > results.normalized.sarif
+          mv results.normalized.sarif results.sarif
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: results.sarif
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+        run: make build
+
+      - name: Test
+        run: make test
