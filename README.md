@@ -1,8 +1,10 @@
 # Kedify CLI
 
-This repository contains an experimental `kedify` CLI built with `kong` for command parsing and `bubbletea` plus `lipgloss` for interactive terminal flows.
+`kedify` is a command-line interface for working with the Kedify API from your terminal.
 
-## Current Features
+The CLI currently focuses on authentication, cluster inspection, and applying recommendation data to Helm values files.
+
+## Features
 
 - `kedify auth login`
   Reads a Kedify API token and stores it in the OS credential store when available, with a file fallback.
@@ -27,11 +29,18 @@ This repository contains an experimental `kedify` CLI built with `kong` for comm
 
 ## Build
 
+Build the CLI locally with:
+
 ```bash
 make build
 ```
 
 The binary will be available at `./bin/kedify`.
+
+### Requirements
+
+- Go toolchain version from `go.mod`
+- `make`
 
 ## Authentication
 
@@ -39,6 +48,13 @@ Generate a Kedify API token at:
 
 ```text
 https://dashboard.dev.kedify.io/api-keys
+```
+
+The CLI stores credentials in:
+
+```text
+OS credential store when available
+~/.config/kedify/credentials.json as fallback
 ```
 
 Interactive login:
@@ -69,13 +85,6 @@ Piped login:
 
 ```bash
 printf '%s\n' "$KEDIFY_TOKEN" | ./bin/kedify auth login
-```
-
-Credentials are stored in:
-
-```text
-OS credential store when available
-~/.config/kedify/credentials.json as fallback
 ```
 
 ## Usage
@@ -180,3 +189,13 @@ Or via environment variable:
 ```bash
 KEDIFY_TOKEN="$KEDIFY_TOKEN" ./bin/kedify get cluster my-cluster
 ```
+
+## Development Notes
+
+- The CLI keeps command output on `stdout` so it remains script-friendly.
+- Interactive prompts and terminal UX are sent to `stderr`.
+- Paginated API responses are read across all pages automatically before output is printed.
+
+## License
+
+Licensed under the Apache License v2.0. See [LICENSE](LICENSE).
