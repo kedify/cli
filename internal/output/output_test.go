@@ -8,6 +8,25 @@ import (
 	"testing"
 )
 
+func assertHeaderOrder(t *testing.T, output string, expected []string) {
+	t.Helper()
+
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	if len(lines) == 0 {
+		t.Fatalf("expected header line in output %q", output)
+	}
+
+	header := lines[0]
+	start := 0
+	for _, column := range expected {
+		index := strings.Index(header[start:], column)
+		if index == -1 {
+			t.Fatalf("expected header %q in line %q", column, header)
+		}
+		start += index + len(column)
+	}
+}
+
 func TestWriteTextClusterList(t *testing.T) {
 	var out bytes.Buffer
 	value := []map[string]any{
@@ -235,9 +254,9 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"KIND",
-		"CONTAINER",
-		"NAME",
 		"NAMESPACE",
+		"NAME",
+		"CONTAINER",
 		"CPU REQUESTS",
 		"CPU LIMITS",
 		"MEMORY REQUESTS",
@@ -253,9 +272,7 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 			t.Fatalf("expected %q in output %q", expected, got)
 		}
 	}
-	if !strings.Contains(got, "KIND") || !strings.Contains(got, "CONTAINER") || !strings.Contains(got, "MEMORY LIMITS") {
-		t.Fatalf("unexpected header order in output %q", got)
-	}
+	assertHeaderOrder(t, got, []string{"KIND", "NAMESPACE", "NAME", "CONTAINER", "CPU REQUESTS", "CPU LIMITS", "MEMORY REQUESTS", "MEMORY LIMITS"})
 	if strings.Contains(got, "AGENT VERSION") {
 		t.Fatalf("unexpected cluster table output: %q", got)
 	}
@@ -289,9 +306,9 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"KIND",
-		"CONTAINER",
-		"NAME",
 		"NAMESPACE",
+		"NAME",
+		"CONTAINER",
 		"CPU REQUESTS",
 		"CPU LIMITS",
 		"MEMORY REQUESTS",
@@ -318,11 +335,17 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	if !strings.Contains(got, "audit-sidecar") || !strings.Contains(got, "16Mi -> 24Mi") || !strings.Contains(got, "64Mi -> 72Mi") {
 		t.Fatalf("expected sidecar recommendation row in output %q", got)
 	}
-	if !strings.Contains(got, "NAME") || !strings.Contains(got, "CONTAINER") || !strings.Contains(got, "MEMORY LIMITS") {
-		t.Fatalf("missing recommendation headers in output %q", got)
+	assertHeaderOrder(t, got, []string{"KIND", "NAMESPACE", "NAME", "CONTAINER", "CPU REQUESTS", "CPU LIMITS", "MEMORY REQUESTS", "MEMORY LIMITS"})
+	found := false
+	for _, line := range strings.Split(got, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 4 && fields[0] == "Deployment" && fields[1] == "keda" && fields[2] == "kedify-agent" && fields[3] == "manager" {
+			found = true
+			break
+		}
 	}
-	if !strings.Contains(got, "Deployment  manager") {
-		t.Fatalf("expected workload container column in output %q", got)
+	if !found {
+		t.Fatalf("expected workload row with container column in output %q", got)
 	}
 }
 

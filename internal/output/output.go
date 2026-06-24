@@ -146,14 +146,14 @@ func renderRecommendationListText(recommendations []map[string]any) []byte {
 
 	grouped := groupRecommendations(recommendations)
 	rows := make([][]string, 0, len(grouped)+1)
-	rows = append(rows, []string{"KIND", "CONTAINER", "NAME", "NAMESPACE", "CPU REQUESTS", "CPU LIMITS", "MEMORY REQUESTS", "MEMORY LIMITS"})
+	rows = append(rows, []string{"KIND", "NAMESPACE", "NAME", "CONTAINER", "CPU REQUESTS", "CPU LIMITS", "MEMORY REQUESTS", "MEMORY LIMITS"})
 
 	for _, recommendation := range grouped {
 		rows = append(rows, []string{
 			recommendation.kind,
-			recommendation.container,
-			recommendation.name,
 			recommendation.namespace,
+			recommendation.name,
+			recommendation.container,
 			recommendation.cpuRequests,
 			recommendation.cpuLimits,
 			recommendation.memoryRequests,
