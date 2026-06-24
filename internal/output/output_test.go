@@ -235,9 +235,9 @@ func TestWriteTextRecommendationsListUsesTable(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"KIND",
-		"CONTAINER",
-		"NAME",
 		"NAMESPACE",
+		"NAME",
+		"CONTAINER",
 		"CPU REQUESTS",
 		"CPU LIMITS",
 		"MEMORY REQUESTS",
@@ -289,9 +289,9 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	got := out.String()
 	for _, expected := range []string{
 		"KIND",
-		"CONTAINER",
-		"NAME",
 		"NAMESPACE",
+		"NAME",
+		"CONTAINER",
 		"CPU REQUESTS",
 		"CPU LIMITS",
 		"MEMORY REQUESTS",
@@ -321,7 +321,7 @@ func TestWriteTextRecommendationsFromSampleFileUsesTable(t *testing.T) {
 	if !strings.Contains(got, "NAME") || !strings.Contains(got, "CONTAINER") || !strings.Contains(got, "MEMORY LIMITS") {
 		t.Fatalf("missing recommendation headers in output %q", got)
 	}
-	if !strings.Contains(got, "Deployment  manager") {
+	if !strings.Contains(got, "Deployment  keda       kedify-agent                       manager") {
 		t.Fatalf("expected workload container column in output %q", got)
 	}
 }
