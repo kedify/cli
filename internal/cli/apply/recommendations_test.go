@@ -1,13 +1,18 @@
-package cli
+package apply
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	clictx "github.com/kedify/cli/internal/cli/context"
+	clierrors "github.com/kedify/cli/internal/errors"
+	"github.com/kedify/cli/internal/output"
 )
 
 func TestApplyRecommendationsDiffDryRunDoesNotMutateValuesFile(t *testing.T) {
@@ -20,21 +25,24 @@ func TestApplyRecommendationsDiffDryRunDoesNotMutateValuesFile(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--container", "keda-operator",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests,memory-limits",
-		"--min-confidence", "20",
-		"--format", "diff",
-		"--dry-run",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		Container:           "keda-operator",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests,memory-limits",
+		MinConfidence:       20,
+		Format:              "diff",
+		DryRun:              true,
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -57,20 +65,23 @@ func TestApplyRecommendationsDiffPatchesValuesFile(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--container", "keda-operator",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests,memory-limits",
-		"--min-confidence", "20",
-		"--format", "diff",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		Container:           "keda-operator",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests,memory-limits",
+		MinConfidence:       20,
+		Format:              "diff",
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "+            memory: 138Mi") {
 		t.Fatalf("stdout = %q, want unified diff with memory change", stdout.String())
@@ -103,20 +114,23 @@ func TestApplyRecommendationsOverrideWritesOutputFile(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/kedify-agent",
-		"--namespace", "keda",
-		"--container", "manager",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--min-confidence", "20",
-		"--format", "override",
-		"--output-file", outputFile,
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/kedify-agent",
+		Namespace:           "keda",
+		Container:           "manager",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		MinConfidence:       20,
+		Format:              "override",
+		OutputFile:          outputFile,
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -156,21 +170,24 @@ func TestApplyRecommendationsJSONReportsContainerScopedPath(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--container", "keda-operator",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests,memory-limits",
-		"--min-confidence", "20",
-		"--format", "json",
-		"--dry-run",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		Container:           "keda-operator",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests,memory-limits",
+		MinConfidence:       20,
+		Format:              "json",
+		DryRun:              true,
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -215,20 +232,23 @@ func TestApplyRecommendationsWithoutContainerAutoResolvesSingleMatchingContainer
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator-metrics-apiserver",
-		"--namespace", "keda",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests,memory-limits",
-		"--min-confidence", "20",
-		"--format", "json",
-		"--dry-run",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator-metrics-apiserver",
+		Namespace:           "keda",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests,memory-limits",
+		MinConfidence:       20,
+		Format:              "json",
+		DryRun:              true,
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 
 	var result applyRecommendationsResult
@@ -256,20 +276,23 @@ func TestApplyRecommendationsWithoutContainerPatchesAllMatchedContainers(t *test
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests,memory-limits",
-		"--min-confidence", "20",
-		"--format", "json",
-		"--dry-run",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests,memory-limits",
+		MinConfidence:       20,
+		Format:              "json",
+		DryRun:              true,
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 
 	var result applyRecommendationsResult
@@ -366,32 +389,35 @@ func TestApplyRecommendationsWithoutContainerFailsWhenOneMatchedContainerIsMissi
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests,memory-limits",
-		"--min-confidence", "20",
-		"--format", "json",
-		"--dry-run",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests,memory-limits",
+		MinConfidence:       20,
+		Format:              "json",
+		DryRun:              true,
+	}, stdout, stderr)
 
-	if code != 0 {
-		var result applyRecommendationsResult
-		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-			t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
-		}
-		if !containsReasonCode(result.Reasons, "not_found") {
-			t.Fatalf("reasons = %#v, want not_found", result.Reasons)
-		}
-		if !strings.Contains(stdout.String(), "audit-sidecar") || !strings.Contains(stdout.String(), "memory-limits") {
-			t.Fatalf("stdout = %q, want failing container and resource details", stdout.String())
-		}
-		return
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
 	}
-	t.Fatalf("Run() exit code = %d, want non-zero", code)
+	if code == 0 {
+		t.Fatalf("runApply() exit code = %d, want non-zero", code)
+	}
+
+	var result applyRecommendationsResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal() error = %v, stdout = %q", err, stdout.String())
+	}
+	if !containsReasonCode(result.Reasons, "not_found") {
+		t.Fatalf("reasons = %#v, want not_found", result.Reasons)
+	}
+	if !strings.Contains(stdout.String(), "audit-sidecar") || !strings.Contains(stdout.String(), "memory-limits") {
+		t.Fatalf("stdout = %q, want failing container and resource details", stdout.String())
+	}
 }
 
 func TestApplyRecommendationsFailsBelowConfidenceThreshold(t *testing.T) {
@@ -400,19 +426,23 @@ func TestApplyRecommendationsFailsBelowConfidenceThreshold(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--container", "keda-operator",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests",
-		"--format", "json",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		Container:           "keda-operator",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests",
+		MinConfidence:       90,
+		Format:              "json",
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code == 0 {
-		t.Fatalf("Run() exit code = %d, want non-zero", code)
+		t.Fatalf("runApply() exit code = %d, want non-zero", code)
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -436,20 +466,23 @@ func TestApplyRecommendationsFailsWhenResourceIsMissing(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/kedify-agent",
-		"--namespace", "keda",
-		"--container", "manager",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-limits",
-		"--min-confidence", "20",
-		"--format", "json",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/kedify-agent",
+		Namespace:           "keda",
+		Container:           "manager",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-limits",
+		MinConfidence:       20,
+		Format:              "json",
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code == 0 {
-		t.Fatalf("Run() exit code = %d, want non-zero", code)
+		t.Fatalf("runApply() exit code = %d, want non-zero", code)
 	}
 
 	var result applyRecommendationsResult
@@ -484,20 +517,23 @@ duplicates:
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/keda-operator",
-		"--namespace", "keda",
-		"--container", "keda-operator",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests",
-		"--min-confidence", "20",
-		"--format", "json",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/keda-operator",
+		Namespace:           "keda",
+		Container:           "keda-operator",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests",
+		MinConfidence:       20,
+		Format:              "json",
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code == 0 {
-		t.Fatalf("Run() exit code = %d, want non-zero", code)
+		t.Fatalf("runApply() exit code = %d, want non-zero", code)
 	}
 
 	var result applyRecommendationsResult
@@ -561,20 +597,23 @@ spec:
 
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
-	code := Run([]string{
-		"apply", "recommendations", "deployment/demo",
-		"--namespace", "custom-ns",
-		"--chart-path", chartPath,
-		"--values-file", valuesFile,
-		"--recommendations-file", recommendationsFile,
-		"--resources", "cpu-requests",
-		"--min-confidence", "20",
-		"--format", "json",
-		"--dry-run",
-	}, bytes.NewBuffer(nil), stdout, stderr)
+	code, err := runApply(t, &ApplyRecommendationsCmd{
+		Target:              "deployment/demo",
+		Namespace:           "custom-ns",
+		ChartPath:           chartPath,
+		ValuesFile:          valuesFile,
+		RecommendationsFile: recommendationsFile,
+		Resources:           "cpu-requests",
+		MinConfidence:       20,
+		Format:              "json",
+		DryRun:              true,
+	}, stdout, stderr)
 
+	if err != nil {
+		t.Fatalf("runApply() error = %v", err)
+	}
 	if code != 0 {
-		t.Fatalf("Run() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+		t.Fatalf("runApply() exit code = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("stderr = %q, want empty", stderr.String())
@@ -592,10 +631,36 @@ spec:
 	}
 }
 
+func runApply(t *testing.T, cmd *ApplyRecommendationsCmd, stdout, stderr *bytes.Buffer) (int, error) {
+	t.Helper()
+
+	ctx := &clictx.Context{
+		Stdin:       bytes.NewBuffer(nil),
+		Stdout:      stdout,
+		Stderr:      stderr,
+		WriteOutput: output.WriteOutput,
+	}
+
+	if err := cmd.Run(ctx); err != nil {
+		var cmdErr *clierrors.CommandResultError
+		if errors.As(err, &cmdErr) {
+			if cmdErr.Payload != nil {
+				if writeErr := output.WriteOutput(stdout, cmdErr.Payload, "json"); writeErr != nil {
+					return 1, writeErr
+				}
+			}
+			return cmdErr.ExitCode, nil
+		}
+		return 1, err
+	}
+
+	return 0, nil
+}
+
 func copyTestChart(t *testing.T) (string, string) {
 	t.Helper()
 
-	sourceRoot, err := filepath.Abs("../../test/chart")
+	sourceRoot, err := filepath.Abs("../../../test/chart")
 	if err != nil {
 		t.Fatalf("Abs() error = %v", err)
 	}
@@ -643,7 +708,7 @@ func copyDir(t *testing.T, source, target string) {
 func testRecommendationsFile(t *testing.T) string {
 	t.Helper()
 
-	path, err := filepath.Abs("../../test/recommendations.json")
+	path, err := filepath.Abs("../../../test/recommendations.json")
 	if err != nil {
 		t.Fatalf("Abs() error = %v", err)
 	}
