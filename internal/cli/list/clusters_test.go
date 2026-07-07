@@ -61,6 +61,13 @@ func (f *fakeClusterService) GetRecommendations(apiURL, token, clusterID string)
 	return f.recommendations, nil
 }
 
+func (f *fakeClusterService) DeleteCluster(apiURL, token, clusterID string) error {
+	f.lastURL = apiURL
+	f.lastToken = token
+	f.lastID = clusterID
+	return f.err
+}
+
 func TestListClustersCmdRunWritesClusters(t *testing.T) {
 	store := &fakeCredentialsStore{creds: service.Credentials{Token: "stored-token"}}
 	clusterService := &fakeClusterService{

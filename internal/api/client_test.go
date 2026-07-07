@@ -189,3 +189,25 @@ func TestGetRecommendationsFallsBackToNonPaginatedPayload(t *testing.T) {
 		t.Fatalf("requests = %d, want 1", requests)
 	}
 }
+
+func TestDeleteClusterCallsDedicatedEndpoint(t *testing.T) {
+	client := &Client{httpClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodDelete {
+			t.Fatalf("method = %q", r.Method)
+		}
+		if r.URL.Path != "/v1/clusters/fc6af0dc-685b-4055-805d-0d3e0ead1596" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+
+		return &http.Response{
+			StatusCode: http.StatusNoContent,
+			Status:     "204 No Content",
+			Body:       io.NopCloser(strings.NewReader("")),
+			Header:     make(http.Header),
+		}, nil
+	})}}
+
+	if err := client.DeleteCluster("https://api.dev.kedify.io/v1", "token", "fc6af0dc-685b-4055-805d-0d3e0ead1596"); err != nil {
+		t.Fatalf("DeleteCluster() error = %v", err)
+	}
+}
