@@ -1,4 +1,4 @@
-package cli
+package apply
 
 import (
 	"bytes"
@@ -12,6 +12,9 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	clictx "github.com/kedify/cli/internal/cli/context"
+	clierrors "github.com/kedify/cli/internal/errors"
 )
 
 var supportedRecommendationResources = []string{
@@ -113,7 +116,7 @@ type selectedContainerRecommendations struct {
 	SelectedResources  []string
 }
 
-func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
+func (c *ApplyRecommendationsCmd) Run(ctx *clictx.Context) error {
 	if c.Format == "override" && !c.DryRun && strings.TrimSpace(c.OutputFile) == "" {
 		return errors.New("--output-file is required when --format override is used without --dry-run")
 	}
@@ -137,7 +140,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 			Code:    "unsupported",
 			Message: fmt.Sprintf("workload kind %q is not supported in v1", kind),
 		})
-		return &commandResultError{exitCode: 1, payload: result}
+		return &clierrors.CommandResultError{ExitCode: 1, Payload: result}
 	}
 
 	recommendations, err := loadRecommendationsFile(c.RecommendationsFile)
@@ -159,7 +162,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 				Code:    resolutionErr.Code,
 				Message: resolutionErr.Message,
 			})
-			return &commandResultError{exitCode: 1, payload: result}
+			return &clierrors.CommandResultError{ExitCode: 1, Payload: result}
 		}
 		return err
 	}
@@ -240,7 +243,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 	}
 
 	if len(containerSelections) == 0 {
-		return &commandResultError{exitCode: 1, payload: result}
+		return &clierrors.CommandResultError{ExitCode: 1, Payload: result}
 	}
 
 	renderedManifest, err := renderHelmChart(c.ChartPath, c.ValuesFile, c.Namespace)
@@ -290,7 +293,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 	}
 
 	if len(result.Reasons) > 0 {
-		return &commandResultError{exitCode: 1, payload: result}
+		return &clierrors.CommandResultError{ExitCode: 1, Payload: result}
 	}
 
 	overrideValues := map[string]any{}
@@ -321,7 +324,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 	}
 
 	if len(result.Reasons) > 0 {
-		return &commandResultError{exitCode: 1, payload: result}
+		return &clierrors.CommandResultError{ExitCode: 1, Payload: result}
 	}
 
 	patchedValues, err := marshalYAMLNode(&root)
@@ -351,7 +354,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 			result.ChangedFiles = append(result.ChangedFiles, c.OutputFile)
 			result.OutputFile = c.OutputFile
 		}
-		_, err = ctx.stdout.Write(overrideBytes)
+		_, err = ctx.Stdout.Write(overrideBytes)
 		return err
 	case "diff":
 		diffOutput, err := unifiedDiff(c.ValuesFile, valuesData, patchedValues)
@@ -371,7 +374,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 		if diffOutput == "" {
 			diffOutput = "\n"
 		}
-		_, err = io.WriteString(ctx.stdout, diffOutput)
+		_, err = io.WriteString(ctx.Stdout, diffOutput)
 		return err
 	default:
 		result.Result = "patched"
@@ -384,7 +387,7 @@ func (c *ApplyRecommendationsCmd) Run(ctx *context) error {
 			}
 			result.ChangedFiles = append(result.ChangedFiles, c.ValuesFile)
 		}
-		return ctx.writeOutput(ctx.stdout, result, "json")
+		return ctx.WriteOutput(ctx.Stdout, result, "json")
 	}
 }
 

@@ -12,6 +12,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func WriteOutput(w io.Writer, value any, format string) error {
+	return Write(w, value, format)
+}
+
 func Write(w io.Writer, value any, format string) error {
 	var (
 		data []byte

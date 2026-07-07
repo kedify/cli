@@ -1,9 +1,11 @@
-package cli
+package get
 
 import (
 	"fmt"
 
 	"github.com/google/uuid"
+
+	clictx "github.com/kedify/cli/internal/cli/context"
 )
 
 type GetClusterCmd struct {
@@ -11,15 +13,15 @@ type GetClusterCmd struct {
 	Output string `name:"output" short:"o" help:"Output format." enum:"text,json,yaml" default:"text"`
 }
 
-func (c *GetClusterCmd) Run(ctx *context) error {
-	token, err := resolveToken(ctx)
+func (c *GetClusterCmd) Run(ctx *clictx.Context) error {
+	token, err := clictx.ResolveToken(ctx)
 	if err != nil {
 		return err
 	}
 
 	var clusters []map[string]any
 	if c.Name == "" || !isUUID(c.Name) {
-		clusters, err = ctx.client.ListClusters(ctx.apiURL, token)
+		clusters, err = ctx.Client.ListClusters(ctx.APIURL, token)
 		if err != nil {
 			return err
 		}
@@ -28,7 +30,7 @@ func (c *GetClusterCmd) Run(ctx *context) error {
 	var cluster map[string]any
 	if c.Name != "" {
 		if isUUID(c.Name) {
-			cluster, err = ctx.client.GetCluster(ctx.apiURL, token, c.Name)
+			cluster, err = ctx.Client.GetCluster(ctx.APIURL, token, c.Name)
 			if err != nil {
 				return err
 			}
@@ -39,20 +41,20 @@ func (c *GetClusterCmd) Run(ctx *context) error {
 			}
 		}
 	} else {
-		selectedCluster, err := ctx.selectCluster(ctx.stdin, ctx.stdout, ctx.stderr, clusters)
+		selectedCluster, err := ctx.SelectCluster(ctx.Stdin, ctx.Stdout, ctx.Stderr, clusters)
 		if err != nil {
 			return err
 		}
 		cluster = selectedCluster
 		if id := clusterString(selectedCluster, "id"); isUUID(id) {
-			cluster, err = ctx.client.GetCluster(ctx.apiURL, token, id)
+			cluster, err = ctx.Client.GetCluster(ctx.APIURL, token, id)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	return ctx.writeOutput(ctx.stdout, cluster, c.Output)
+	return ctx.WriteOutput(ctx.Stdout, cluster, c.Output)
 }
 
 func findCluster(clusters []map[string]any, query string) (map[string]any, error) {
