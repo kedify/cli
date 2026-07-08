@@ -20,12 +20,14 @@ The CLI currently focuses on authentication, cluster inspection, and applying re
   Calls the Kedify API and transparently reads all pages before printing the final cluster list.
 - `kedify get cluster [name-or-id]`
   Prints one cluster by name or id, and shows an interactive picker when no name is provided.
+- `kedify delete cluster [name-or-id]`
+  Deletes one cluster by name or id, and shows an interactive picker when no name is provided.
 - `kedify list recommendations <cluster-id>`
   Prints the recommendations payload for a cluster id.
 - `kedify apply recommendations <kind/name>`
   Applies recommendations from a saved JSON or YAML file to a Helm values file and can emit `json`, `diff`, or `override` output.
 - Output formatting
-  `kedify list clusters`, `kedify get cluster`, and `kedify list recommendations` support `-o` and `--output` with `text`, `json`, or `yaml`. `text` is the default.
+  `kedify list clusters`, `kedify get cluster`, and `kedify list recommendations` support `-o` and `--output` with `text`, `json`, or `yaml`. `text` is the default. `kedify delete cluster` prints its confirmation message to `stderr` and keeps `stdout` empty for shell-friendly usage.
 
 ## Build
 
@@ -119,6 +121,18 @@ Get a cluster as JSON:
 ./bin/kedify get cluster my-cluster -o json
 ```
 
+Delete a cluster by name:
+
+```bash
+./bin/kedify delete cluster my-cluster
+```
+
+Delete a cluster by UUID:
+
+```bash
+./bin/kedify delete cluster fc6af0dc-685b-4055-805d-0d3e0ead1596
+```
+
 List recommendations for a cluster as JSON:
 
 ```bash
@@ -164,6 +178,12 @@ Pick a cluster interactively:
 
 ```bash
 ./bin/kedify get cluster
+```
+
+Pick a cluster interactively and delete it:
+
+```bash
+./bin/kedify delete cluster
 ```
 
 Override the API URL:

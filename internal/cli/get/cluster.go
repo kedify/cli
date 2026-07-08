@@ -35,7 +35,7 @@ func (c *GetClusterCmd) Run(ctx *clictx.Context) error {
 				return err
 			}
 		} else {
-			cluster, err = findCluster(clusters, c.Name)
+			cluster, err = FindCluster(clusters, c.Name)
 			if err != nil {
 				return err
 			}
@@ -57,7 +57,7 @@ func (c *GetClusterCmd) Run(ctx *clictx.Context) error {
 	return ctx.WriteOutput(ctx.Stdout, cluster, c.Output)
 }
 
-func findCluster(clusters []map[string]any, query string) (map[string]any, error) {
+func FindCluster(clusters []map[string]any, query string) (map[string]any, error) {
 	for _, cluster := range clusters {
 		if clusterString(cluster, "name") == query || clusterString(cluster, "id") == query {
 			return cluster, nil
@@ -70,6 +70,10 @@ func findCluster(clusters []map[string]any, query string) (map[string]any, error
 func isUUID(value string) bool {
 	_, err := uuid.Parse(value)
 	return err == nil
+}
+
+func IsUUID(value string) bool {
+	return isUUID(value)
 }
 
 func clusterString(cluster map[string]any, key string) string {

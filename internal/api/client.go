@@ -89,6 +89,14 @@ func (c *Client) GetRecommendations(apiURL, token, clusterID string) (any, error
 	return nil, fmt.Errorf("request recommendations for cluster %s: %w", clusterID, err)
 }
 
+func (c *Client) DeleteCluster(apiURL, token, clusterID string) error {
+	if _, err := c.doRequest(apiURL, token, http.MethodDelete, "/clusters/"+url.PathEscape(clusterID), nil); err != nil {
+		return fmt.Errorf("delete cluster %s: %w", clusterID, err)
+	}
+
+	return nil
+}
+
 func (c *Client) listPaginatedItems(apiURL, token, path string) ([]any, error) {
 	var allItems []any
 	page := 1
@@ -188,28 +196,9 @@ func readResponseBody(resp *http.Response) ([]byte, error) {
 }
 
 func (c *Client) getJSON(apiURL, token, path string, target any) error {
-	requestURL := strings.TrimRight(apiURL, "/") + path
-
-	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
-	if err != nil {
-		return fmt.Errorf("build request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
+	body, err := c.doRequest(apiURL, token, http.MethodGet, path, nil)
 	if err != nil {
 		return err
-	}
-
-	body, err := readResponseBody(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
 	if err := json.Unmarshal(body, target); err != nil {
@@ -217,4 +206,32 @@ func (c *Client) getJSON(apiURL, token, path string, target any) error {
 	}
 
 	return nil
+}
+
+func (c *Client) doRequest(apiURL, token, method, path string, body io.Reader) ([]byte, error) {
+	requestURL := strings.TrimRight(apiURL, "/") + path
+
+	req, err := http.NewRequest(method, requestURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	responseBody, err := readResponseBody(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("request failed with status %s: %s", resp.Status, strings.TrimSpace(string(responseBody)))
+	}
+
+	return responseBody, nil
 }
