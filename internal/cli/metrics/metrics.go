@@ -93,7 +93,7 @@ func (c *MetricsCmd) Run(app *clictx.Context) error {
 			return err
 		}
 		if len(metricNames) == 0 {
-			return errors.New("Prometheus returned no active metrics for selector {__name__=~\".+\"}")
+			return errors.New("prometheus returned no active metrics for selector {__name__=~\".+\"}")
 		}
 	}
 

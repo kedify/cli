@@ -155,7 +155,7 @@ func RunMetricsExplorer(
 		return MetricsResult{}, err
 	}
 	if len(metrics) == 0 && strings.TrimSpace(options.Query) == "" {
-		return MetricsResult{}, errors.New("Prometheus returned no metrics")
+		return MetricsResult{}, errors.New("prometheus returned no metrics")
 	}
 
 	model, err := newMetricsModelWithOptions(client, metrics, options)

@@ -111,7 +111,7 @@ func BuildResources(options ResourceOptions) ([]byte, error) {
 
 	if options.MetricPredictorName != "" {
 		if strings.TrimSpace(options.PrometheusURL) == "" {
-			return nil, fmt.Errorf("Prometheus URL is required for MetricPredictor %q", options.MetricPredictorName)
+			return nil, fmt.Errorf("prometheus URL is required for MetricPredictor %q", options.MetricPredictorName)
 		}
 		rangeFields := 0
 		for _, field := range []string{options.PrometheusStart, options.PrometheusEnd, options.PrometheusStep} {
@@ -120,7 +120,7 @@ func BuildResources(options ResourceOptions) ([]byte, error) {
 			}
 		}
 		if rangeFields != 0 && rangeFields != 3 {
-			return nil, fmt.Errorf("Prometheus start, end, and step must be specified together")
+			return nil, fmt.Errorf("prometheus start, end, and step must be specified together")
 		}
 		resources = append(resources, metricPredictor{
 			APIVersion: "keda.kedify.io/v1alpha1",

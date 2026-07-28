@@ -94,7 +94,7 @@ func newClientWithHTTP(rawURL string, httpClient *http.Client, scopeOrgID string
 func NormalizeURL(rawURL string) (string, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return "", errors.New("Prometheus server URL is required")
+		return "", errors.New("prometheus server URL is required")
 	}
 	if !strings.Contains(rawURL, "://") {
 		rawURL = "http://" + rawURL
@@ -105,13 +105,13 @@ func NormalizeURL(rawURL string) (string, error) {
 		return "", fmt.Errorf("parse Prometheus URL: %w", err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("Prometheus URL scheme must be http or https, got %q", parsed.Scheme)
+		return "", fmt.Errorf("prometheus URL scheme must be http or https, got %q", parsed.Scheme)
 	}
 	if parsed.Host == "" {
-		return "", errors.New("Prometheus server URL must include a host")
+		return "", errors.New("prometheus server URL must include a host")
 	}
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("Prometheus server URL must not include a query or fragment")
+		return "", errors.New("prometheus server URL must not include a query or fragment")
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
 
@@ -169,7 +169,7 @@ func (c *Client) ValidateQuery(ctx context.Context, query string) error {
 
 func (c *Client) RangeQuery(ctx context.Context, query string, start, end time.Time, step time.Duration) ([]Series, error) {
 	if step <= 0 {
-		return nil, errors.New("Prometheus range query step must be greater than zero")
+		return nil, errors.New("prometheus range query step must be greater than zero")
 	}
 
 	params := url.Values{
@@ -257,14 +257,17 @@ func (c *Client) get(ctx context.Context, path string, params url.Values, target
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, 32<<20))
 	if err != nil {
+		_ = response.Body.Close()
 		return fmt.Errorf("read Prometheus response: %w", err)
 	}
+	if err := response.Body.Close(); err != nil {
+		return fmt.Errorf("close Prometheus response body: %w", err)
+	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("Prometheus returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("prometheus returned HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var envelope apiResponse
