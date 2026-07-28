@@ -26,6 +26,8 @@ The CLI currently focuses on authentication, cluster inspection, and applying re
   Prints the recommendations payload for a cluster id.
 - `kedify apply recommendations <kind/name>`
   Applies recommendations from a saved JSON or YAML file to a Helm values file and can emit `json`, `diff`, or `override` output.
+- `kedify metrics`
+  Opens an interactive Prometheus metric explorer, builds and validates a PromQL query, previews it as an ASCII graph, and generates YAML for a `ScaledObject`, a `MetricPredictor`, or both. Creating the resources in Kubernetes is an explicit opt-in.
 - Output formatting
   `kedify list clusters`, `kedify get cluster`, and `kedify list recommendations` support `-o` and `--output` with `text`, `json`, or `yaml`. `text` is the default. `kedify delete cluster` prints its confirmation message to `stderr` and keeps `stdout` empty for shell-friendly usage.
 
@@ -43,6 +45,7 @@ The binary will be available at `./bin/kedify`.
 
 - Go toolchain version from `go.mod`
 - `make`
+- `kubectl` when using Prometheus discovery, port-forwarding, or resource creation
 
 ## Authentication
 
@@ -164,6 +167,63 @@ Apply recommendations and write an override file:
   --format override \
   --output-file ./override-values.yaml
 ```
+
+Explore metrics using Kubernetes service discovery:
+
+```bash
+./bin/kedify metrics
+```
+
+Connect directly to Prometheus and generate manifests for a specific namespace:
+
+```bash
+./bin/kedify metrics \
+  --server=http://localhost:9090 \
+  --namespace=my-app
+```
+
+Preselect parts of the interactive flow:
+
+```bash
+# Discover Prometheus, use the first matching service, and port-forward it.
+./bin/kedify metrics --disco --filter=memory_
+
+# Use a specific kubectl context and kubeconfig for discovery and port-forwarding.
+./bin/kedify metrics \
+  --disco \
+  --context=staging \
+  --kubeconfig=./config/staging.kubeconfig
+
+# Validate this query, select a horizon, and visualize it.
+./bin/kedify metrics \
+  --server=http://localhost:9090 \
+  --query='sum(foobar)' \
+  --visualize
+
+# Skip both choices and immediately load the 3-day graph.
+./bin/kedify metrics \
+  --server=http://localhost:9090 \
+  --query='sum(foobar)' \
+  --visualize \
+  --horizon=3d \
+  --print
+```
+
+`--server` and `--disco` are mutually exclusive. `--visualize` requires `--query`, and `--horizon` requires `--visualize`. Supported horizon values are `6h`, `1d`, `3d`, `1w`, and `30d`. `--context` and `--kubeconfig` are forwarded to every `kubectl` invocation made by the metrics command. A value passed through `--filter` remains editable in the metric browser. Before generated resources are printed, the CLI offers to open a line-numbered YAML editor; `--print` skips this final question and prints directly.
+
+The metrics explorer:
+
+- discovers Prometheus services and Mimir gateways from the active kubeconfig using common labels and can manage a temporary `kubectl port-forward`; Mimir API requests use its `/prometheus` prefix and `X-Scope-OrgID: kedify-agent`;
+- retrieves metric names with the `{__name__=~".+"}` selector;
+- supports arrow and Page Up/Page Down navigation, plus case-insensitive substring filtering as you type;
+- shows label names and values as you drill into a metric;
+- starts from a single-series `sum(metric{label="value"})` expression and lets you edit and validate the final PromQL;
+- can graph the last 6 hours, day, 3 days, week, or month of samples in the terminal, using a range-appropriate Prometheus query step;
+- generates a `kedify-otel` `ScaledObject` with a default target value of `1`, and prompts for its scale target;
+- generates a `MetricPredictor` with a one-week Prometheus range at a `30s` step so it has historical samples for initial training;
+- prints the selected resource manifests by default and only runs `kubectl create` when the creation checkbox is enabled and a final review of the exact YAML, active Kubernetes context, and target namespace is confirmed.
+
+Interactive terminal UX, progress, and optional creation confirmations are written to `stderr`. If no resource manifest is selected, the completed PromQL expression is printed to `stdout`; otherwise, the generated YAML is printed to `stdout`.
 
 Notes for `apply recommendations`:
 

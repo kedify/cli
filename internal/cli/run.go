@@ -14,6 +14,7 @@ import (
 	"github.com/kedify/cli/internal/cli/delete"
 	"github.com/kedify/cli/internal/cli/get"
 	"github.com/kedify/cli/internal/cli/list"
+	"github.com/kedify/cli/internal/cli/metrics"
 	clierrors "github.com/kedify/cli/internal/errors"
 	"github.com/kedify/cli/internal/output"
 	"github.com/kedify/cli/internal/service"
@@ -21,13 +22,14 @@ import (
 )
 
 type CLI struct {
-	APIURL string    `name:"apiurl" help:"Base URL for the Kedify API." default:"https://api.dev.kedify.io/v1" env:"KEDIFY_API_URL"`
-	Token  string    `name:"token" help:"Kedify API token." env:"KEDIFY_TOKEN"`
-	Auth   AuthCmd   `cmd:"" help:"Authentication helpers."`
-	Apply  ApplyCmd  `cmd:"" help:"Apply Kedify recommendations."`
-	Delete DeleteCmd `cmd:"" help:"Delete Kedify resources."`
-	Get    GetCmd    `cmd:"" help:"Get Kedify resources."`
-	List   ListCmd   `cmd:"" help:"List Kedify resources."`
+	APIURL  string             `name:"apiurl" help:"Base URL for the Kedify API." default:"https://api.dev.kedify.io/v1" env:"KEDIFY_API_URL"`
+	Token   string             `name:"token" help:"Kedify API token." env:"KEDIFY_TOKEN"`
+	Auth    AuthCmd            `cmd:"" help:"Authentication helpers."`
+	Apply   ApplyCmd           `cmd:"" help:"Apply Kedify recommendations."`
+	Delete  DeleteCmd          `cmd:"" help:"Delete Kedify resources."`
+	Get     GetCmd             `cmd:"" help:"Get Kedify resources."`
+	List    ListCmd            `cmd:"" help:"List Kedify resources."`
+	Metrics metrics.MetricsCmd `cmd:"" help:"Explore Prometheus metrics and generate autoscaling manifests."`
 }
 
 type AuthCmd struct {
