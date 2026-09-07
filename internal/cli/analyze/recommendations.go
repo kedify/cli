@@ -108,7 +108,6 @@ func (b *cappedBuffer) Write(data []byte) (int, error) {
 	}
 	if remaining < len(data) {
 		b.exceeded = true
-		return remaining, io.ErrShortWrite
 	}
 	return len(data), nil
 }
