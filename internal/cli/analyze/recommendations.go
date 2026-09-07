@@ -78,7 +78,10 @@ func (c *RecommendationsCmd) Run(ctx *clictx.Context) error {
 	if runErr != nil {
 		var exitError *exec.ExitError
 		if errors.As(runErr, &exitError) {
-			return &clierrors.CommandResultError{ExitCode: exitError.ExitCode()}
+			if exitCode := exitError.ExitCode(); exitCode >= 0 {
+				return &clierrors.CommandResultError{ExitCode: exitCode}
+			}
+			return fmt.Errorf("analyzer %q terminated: %w", analyzer, runErr)
 		}
 		return fmt.Errorf("run analyzer %q: %w", analyzer, runErr)
 	}

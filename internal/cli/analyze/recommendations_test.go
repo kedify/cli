@@ -49,6 +49,12 @@ func TestMain(m *testing.M) {
 			os.Exit(helperExitInternal)
 		}
 		os.Exit(0)
+	case "signal":
+		process, err := os.FindProcess(os.Getpid())
+		if err != nil || process.Kill() != nil {
+			os.Exit(helperExitInternal)
+		}
+		os.Exit(helperExitInternal)
 	case "exit-1", "exit-2":
 		exitCode, _ := strconv.Atoi(strings.TrimPrefix(mode, "exit-"))
 		_, _ = fmt.Fprintf(os.Stderr, "fake analyzer failed with code %d\n", exitCode)
@@ -89,6 +95,20 @@ func TestRecommendationsPreservesAnalyzerExitCodesAndStderr(t *testing.T) {
 				t.Fatalf("stderr = %q, want analyzer diagnostic", stderr.String())
 			}
 		})
+	}
+}
+
+func TestRecommendationsReportsAnalyzerSignalAsOperationalError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports Process.Kill with a numeric exit code")
+	}
+	err := runWithFakeAnalyzer(t, "signal", bytes.NewBufferString(validSnapshotRequest), &bytes.Buffer{}, &bytes.Buffer{})
+	var resultError *clierrors.CommandResultError
+	if errors.As(err, &resultError) {
+		t.Fatalf("Run() returned child exit code %d for a signal", resultError.ExitCode)
+	}
+	if err == nil || !strings.Contains(err.Error(), "terminated") {
+		t.Fatalf("Run() error = %v, want termination error", err)
 	}
 }
 
