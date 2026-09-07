@@ -49,6 +49,11 @@ func TestMain(m *testing.M) {
 			os.Exit(helperExitInternal)
 		}
 		os.Exit(0)
+	case "oversized-output-exit-2":
+		if _, err := io.CopyN(os.Stdout, repeatingReader{}, maxAnalyzerResponseBytes+1); err != nil {
+			os.Exit(helperExitInternal)
+		}
+		os.Exit(helperExitInvalid)
 	case "signal":
 		process, err := os.FindProcess(os.Getpid())
 		if err != nil || process.Kill() != nil {
@@ -124,6 +129,18 @@ func TestRecommendationsRejectsOversizedAnalyzerOutput(t *testing.T) {
 	err := runWithFakeAnalyzer(t, "oversized-output", bytes.NewBufferString(validSnapshotRequest), stdout, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "analyzer response exceeds 67108864-byte limit") {
 		t.Fatalf("Run() error = %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+func TestRecommendationsPreservesExitCodeWithOversizedAnalyzerOutput(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	err := runWithFakeAnalyzer(t, "oversized-output-exit-2", bytes.NewBufferString(validSnapshotRequest), stdout, &bytes.Buffer{})
+	var resultError *clierrors.CommandResultError
+	if !errors.As(err, &resultError) || resultError.ExitCode != helperExitInvalid {
+		t.Fatalf("Run() error = %#v, want command exit code %d", err, helperExitInvalid)
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())

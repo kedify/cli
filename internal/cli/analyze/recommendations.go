@@ -72,9 +72,6 @@ func (c *RecommendationsCmd) Run(ctx *clictx.Context) error {
 	response := cappedBuffer{limit: maxAnalyzerResponseBytes}
 	command.Stdout = &response
 	runErr := command.Run()
-	if response.exceeded {
-		return fmt.Errorf("analyzer response exceeds %d-byte limit", maxAnalyzerResponseBytes)
-	}
 	if runErr != nil {
 		var exitError *exec.ExitError
 		if errors.As(runErr, &exitError) {
@@ -84,6 +81,9 @@ func (c *RecommendationsCmd) Run(ctx *clictx.Context) error {
 			return fmt.Errorf("analyzer %q terminated: %w", analyzer, runErr)
 		}
 		return fmt.Errorf("run analyzer %q: %w", analyzer, runErr)
+	}
+	if response.exceeded {
+		return fmt.Errorf("analyzer response exceeds %d-byte limit", maxAnalyzerResponseBytes)
 	}
 
 	if err := validateResponse(response.Bytes()); err != nil {
