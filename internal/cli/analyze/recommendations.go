@@ -17,11 +17,12 @@ import (
 )
 
 const (
-	analyzerProtocolVersion = "kedify-analyzer/v1"
-	inputSchemaVersion      = "resource-analysis-input/v1"
-	outputSchemaVersion     = "resource-analysis-output/v1"
-	engineVersion           = "1"
-	maxSnapshotBytes        = 16 << 20
+	analyzerProtocolVersion  = "kedify-analyzer/v1"
+	inputSchemaVersion       = "resource-analysis-input/v1"
+	outputSchemaVersion      = "resource-analysis-output/v1"
+	engineVersion            = "1"
+	maxSnapshotBytes         = 16 << 20
+	maxAnalyzerResponseBytes = 64 << 20
 )
 
 type RecommendationsCmd struct {
@@ -68,7 +69,7 @@ func (c *RecommendationsCmd) Run(ctx *clictx.Context) error {
 	command := exec.Command(analyzer) // #nosec G204 -- the executable is selected explicitly or from trusted local discovery; no shell is used.
 	command.Stdin = bytes.NewReader(request)
 	command.Stderr = ctx.Stderr
-	var response bytes.Buffer
+	response := cappedBuffer{limit: maxAnalyzerResponseBytes}
 	command.Stdout = &response
 	if err := command.Run(); err != nil {
 		var exitError *exec.ExitError
@@ -76,6 +77,9 @@ func (c *RecommendationsCmd) Run(ctx *clictx.Context) error {
 			return &clierrors.CommandResultError{ExitCode: exitError.ExitCode()}
 		}
 		return fmt.Errorf("start analyzer %q: %w", analyzer, err)
+	}
+	if response.exceeded {
+		return fmt.Errorf("analyzer response exceeds %d-byte limit", maxAnalyzerResponseBytes)
 	}
 
 	if err := validateResponse(response.Bytes()); err != nil {
@@ -85,6 +89,30 @@ func (c *RecommendationsCmd) Run(ctx *clictx.Context) error {
 		return fmt.Errorf("write analyzer result: %w", err)
 	}
 	return nil
+}
+
+type cappedBuffer struct {
+	buffer   bytes.Buffer
+	limit    int
+	exceeded bool
+}
+
+func (b *cappedBuffer) Write(data []byte) (int, error) {
+	remaining := b.limit - b.buffer.Len()
+	if remaining > len(data) {
+		remaining = len(data)
+	}
+	if remaining > 0 {
+		_, _ = b.buffer.Write(data[:remaining])
+	}
+	if remaining < len(data) {
+		b.exceeded = true
+	}
+	return len(data), nil
+}
+
+func (b *cappedBuffer) Bytes() []byte {
+	return b.buffer.Bytes()
 }
 
 func readSnapshot(path string, stdin io.Reader) ([]byte, error) {

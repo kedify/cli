@@ -88,7 +88,8 @@ analyzer. It accepts only protocol `kedify-analyzer/v1`, input/output schemas
 `resource-analysis-input/v1` and `resource-analysis-output/v1`, and engine version
 `1`. CPU `aggregatedUsage` in the request must already reflect the policy's `max` or
 `percentile` selection. Analyzer diagnostics stay on `stderr`; the validated JSON
-result is the only `stdout` output.
+result is the only `stdout` output. Requests over 16 MiB and analyzer responses over
+64 MiB are rejected.
 
 ## Authentication
 

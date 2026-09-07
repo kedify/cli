@@ -44,6 +44,11 @@ func TestMain(m *testing.M) {
 			os.Exit(helperExitInternal)
 		}
 		os.Exit(0)
+	case "oversized-output":
+		if _, err := io.CopyN(os.Stdout, repeatingReader{}, maxAnalyzerResponseBytes+1); err != nil {
+			os.Exit(helperExitInternal)
+		}
+		os.Exit(0)
 	case "exit-1", "exit-2":
 		exitCode, _ := strconv.Atoi(strings.TrimPrefix(mode, "exit-"))
 		_, _ = fmt.Fprintf(os.Stderr, "fake analyzer failed with code %d\n", exitCode)
@@ -91,6 +96,17 @@ func TestRecommendationsReportsShortStdoutWrite(t *testing.T) {
 	err := runWithFakeAnalyzer(t, "success", bytes.NewBufferString(validSnapshotRequest), shortWriter{}, &bytes.Buffer{})
 	if !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("Run() error = %v, want %v", err, io.ErrShortWrite)
+	}
+}
+
+func TestRecommendationsRejectsOversizedAnalyzerOutput(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	err := runWithFakeAnalyzer(t, "oversized-output", bytes.NewBufferString(validSnapshotRequest), stdout, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "analyzer response exceeds 67108864-byte limit") {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
 }
 
@@ -264,4 +280,13 @@ type shortWriter struct{}
 
 func (shortWriter) Write(data []byte) (int, error) {
 	return len(data) / 2, nil
+}
+
+type repeatingReader struct{}
+
+func (repeatingReader) Read(data []byte) (int, error) {
+	for i := range data {
+		data[i] = 'x'
+	}
+	return len(data), nil
 }
