@@ -26,6 +26,8 @@ The CLI currently focuses on authentication, cluster inspection, and applying re
   Prints the recommendations payload for a cluster id.
 - `kedify apply recommendations <kind/name>`
   Applies recommendations from a saved JSON or YAML file to a Helm values file and can emit `json`, `diff`, or `override` output.
+- `kedify analyze recommendations <snapshot-request>`
+  Runs a separately installed `kedify-analyzer` against a versioned normalized snapshot without using Kedify SaaS.
 - `kedify metrics`
   Opens an interactive Prometheus metric explorer, builds and validates a PromQL query, previews it as an ASCII graph, and generates YAML for a `ScaledObject`, a `MetricPredictor`, or both. Creating the resources in Kubernetes is an explicit opt-in.
 - Output formatting
@@ -46,6 +48,47 @@ The binary will be available at `./bin/kedify`.
 - Go toolchain version from `go.mod`
 - `make`
 - `kubectl` when using Prometheus discovery, port-forwarding, or resource creation
+
+### Offline recommendation analysis
+
+The offline command consumes a versioned normalized snapshot request and prints the
+analyzer's JSON result unchanged. The request envelope is:
+
+```json
+{
+  "protocolVersion": "kedify-analyzer/v1",
+  "input": {
+    "schemaVersion": "resource-analysis-input/v1",
+    "observedIntervalHours": 24,
+    "containers": []
+  },
+  "policy": {}
+}
+```
+
+Run it from a file or standard input:
+
+```bash
+./bin/kedify analyze recommendations ./snapshot-request.json
+cat ./snapshot-request.json | ./bin/kedify analyze recommendations -
+```
+
+Install a matching `kedify-analyzer` release before entering an air-gapped
+environment and verify its published SHA-256 checksum. The CLI resolves an explicit
+`--analyzer` path first, then `kedify-analyzer` beside the CLI executable, then
+`kedify-analyzer` on `PATH`:
+
+```bash
+./bin/kedify analyze recommendations ./snapshot-request.json \
+  --analyzer ./tools/kedify-analyzer
+```
+
+The command requires no Kedify token, makes no SaaS request, and never downloads an
+analyzer. It accepts only protocol `kedify-analyzer/v1`, input/output schemas
+`resource-analysis-input/v1` and `resource-analysis-output/v1`, and engine version
+`1`. CPU `aggregatedUsage` in the request must already reflect the policy's `max` or
+`percentile` selection. Analyzer diagnostics stay on `stderr`; the validated JSON
+result is the only `stdout` output.
 
 ## Authentication
 
