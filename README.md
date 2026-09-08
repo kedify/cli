@@ -26,6 +26,8 @@ The CLI currently focuses on authentication, cluster inspection, and applying re
   Prints the recommendations payload for a cluster id.
 - `kedify apply recommendations <kind/name>`
   Applies recommendations from a saved JSON or YAML file to a Helm values file and can emit `json`, `diff`, or `override` output.
+- `kedify analyze recommendations <snapshot-request>`
+  Generates recommendations from a normalized snapshot without using Kedify SaaS.
 - `kedify metrics`
   Opens an interactive Prometheus metric explorer, builds and validates a PromQL query, previews it as an ASCII graph, and generates YAML for a `ScaledObject`, a `MetricPredictor`, or both. Creating the resources in Kubernetes is an explicit opt-in.
 - Output formatting
@@ -46,6 +48,57 @@ The binary will be available at `./bin/kedify`.
 - Go toolchain version from `go.mod`
 - `make`
 - `kubectl` when using Prometheus discovery, port-forwarding, or resource creation
+
+### Offline recommendation analysis
+
+The offline command consumes a normalized snapshot and runs the same analysis engine
+used by Kedify services. The request is:
+
+```json
+{
+  "input": {
+    "schemaVersion": "resource-analysis-input/v1",
+    "observedIntervalHours": 24,
+    "containers": [
+      {
+        "target": {
+          "namespace": "default",
+          "kind": "Deployment",
+          "name": "checkout",
+          "container": "api"
+        },
+        "cpu": {
+          "aggregatedUsage": {"available": true, "value": 275},
+          "currentRequest": {"available": true, "value": 200},
+          "currentLimit": {"available": true, "value": 500}
+        },
+        "memory": {
+          "aggregatedUsage": {"available": true, "value": 268435456},
+          "currentRequest": {"available": true, "value": 134217728},
+          "currentLimit": {"available": true, "value": 536870912}
+        }
+      }
+    ]
+  },
+  "policy": {}
+}
+```
+
+Run it from a file or standard input:
+
+```bash
+./bin/kedify analyze recommendations ./snapshot-request.json
+cat ./snapshot-request.json | ./bin/kedify analyze recommendations -
+```
+
+The analysis engine is included in the `kedify` binary. The command requires no
+Kedify token, makes no network request, and does not need a separate runtime or
+download. CPU `aggregatedUsage` in the request must already reflect the policy's
+`max` or `percentile` selection. The result JSON includes the output schema,
+detector, effective policy, evidence, data quality, and recommendations. Requests
+over 16 MiB are rejected. CPU values are millicores and memory values are bytes.
+Set `available` to `false` for a missing signal; an available value of `0` is a
+measured zero.
 
 ## Authentication
 

@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/kedify/cli/internal/api"
+	"github.com/kedify/cli/internal/cli/analyze"
 	"github.com/kedify/cli/internal/cli/apply"
 	"github.com/kedify/cli/internal/cli/auth"
 	clictx "github.com/kedify/cli/internal/cli/context"
@@ -24,12 +25,17 @@ import (
 type CLI struct {
 	APIURL  string             `name:"apiurl" help:"Base URL for the Kedify API." default:"https://api.dev.kedify.io/v1" env:"KEDIFY_API_URL"`
 	Token   string             `name:"token" help:"Kedify API token." env:"KEDIFY_TOKEN"`
+	Analyze AnalyzeCmd         `cmd:"" help:"Analyze local Insights data."`
 	Auth    AuthCmd            `cmd:"" help:"Authentication helpers."`
 	Apply   ApplyCmd           `cmd:"" help:"Apply Kedify recommendations."`
 	Delete  DeleteCmd          `cmd:"" help:"Delete Kedify resources."`
 	Get     GetCmd             `cmd:"" help:"Get Kedify resources."`
 	List    ListCmd            `cmd:"" help:"List Kedify resources."`
 	Metrics metrics.MetricsCmd `cmd:"" help:"Explore Prometheus metrics and generate autoscaling manifests."`
+}
+
+type AnalyzeCmd struct {
+	Recommendations analyze.RecommendationsCmd `cmd:"" help:"Generate recommendations from a normalized snapshot request."`
 }
 
 type AuthCmd struct {
