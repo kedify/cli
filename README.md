@@ -59,7 +59,26 @@ used by Kedify services. The request is:
   "input": {
     "schemaVersion": "resource-analysis-input/v1",
     "observedIntervalHours": 24,
-    "containers": []
+    "containers": [
+      {
+        "target": {
+          "namespace": "default",
+          "kind": "Deployment",
+          "name": "checkout",
+          "container": "api"
+        },
+        "cpu": {
+          "aggregatedUsage": {"available": true, "value": 275},
+          "currentRequest": {"available": true, "value": 200},
+          "currentLimit": {"available": true, "value": 500}
+        },
+        "memory": {
+          "aggregatedUsage": {"available": true, "value": 268435456},
+          "currentRequest": {"available": true, "value": 134217728},
+          "currentLimit": {"available": true, "value": 536870912}
+        }
+      }
+    ]
   },
   "policy": {}
 }
@@ -77,7 +96,9 @@ Kedify token, makes no network request, and does not need a separate runtime or
 download. CPU `aggregatedUsage` in the request must already reflect the policy's
 `max` or `percentile` selection. The result JSON includes the output schema,
 detector, effective policy, evidence, data quality, and recommendations. Requests
-over 16 MiB are rejected.
+over 16 MiB are rejected. CPU values are millicores and memory values are bytes.
+Set `available` to `false` for a missing signal; an available value of `0` is a
+measured zero.
 
 ## Authentication
 
