@@ -4,326 +4,110 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/kedify/recommender/analysis"
+
 	clictx "github.com/kedify/cli/internal/cli/context"
-	clierrors "github.com/kedify/cli/internal/errors"
 )
 
-const (
-	helperModeEnv        = "KEDIFY_TEST_ANALYZER_MODE"
-	helperExpectedEnv    = "KEDIFY_TEST_ANALYZER_REQUEST"
-	helperExitInternal   = 1
-	helperExitInvalid    = 2
-	validSnapshotRequest = `{"protocolVersion":"kedify-analyzer/v1","input":{"schemaVersion":"resource-analysis-input/v1","observedIntervalHours":1,"containers":[]},"policy":{}}`
-	validAnalyzerOutput  = `{"protocolVersion":"kedify-analyzer/v1","analyzerVersion":"test","engineVersion":"1","inputSchemaVersion":"resource-analysis-input/v1","outputSchemaVersion":"resource-analysis-output/v1","output":{"schemaVersion":"resource-analysis-output/v1","detectorVersion":"1"}}` + "\n"
-)
+const validSnapshotRequest = `{"input":{"schemaVersion":"resource-analysis-input/v1","observedIntervalHours":24,"containers":[]},"policy":{}}`
 
-func TestMain(m *testing.M) {
-	mode := os.Getenv(helperModeEnv)
-	if mode == "" {
-		os.Exit(m.Run())
-	}
-
-	request, err := io.ReadAll(os.Stdin)
-	if err != nil || string(request) != os.Getenv(helperExpectedEnv) {
-		_, _ = fmt.Fprintln(os.Stderr, "fake analyzer received an unexpected request")
-		os.Exit(helperExitInvalid)
-	}
-
-	switch mode {
-	case "success":
-		if _, err := io.WriteString(os.Stdout, validAnalyzerOutput); err != nil {
-			os.Exit(helperExitInternal)
-		}
-		os.Exit(0)
-	case "oversized-output":
-		if _, err := io.CopyN(os.Stdout, repeatingReader{}, maxAnalyzerResponseBytes+1); err != nil {
-			os.Exit(helperExitInternal)
-		}
-		os.Exit(0)
-	case "oversized-output-exit-2":
-		if _, err := io.CopyN(os.Stdout, repeatingReader{}, maxAnalyzerResponseBytes+1); err != nil {
-			os.Exit(helperExitInternal)
-		}
-		os.Exit(helperExitInvalid)
-	case "signal":
-		process, err := os.FindProcess(os.Getpid())
-		if err != nil || process.Kill() != nil {
-			os.Exit(helperExitInternal)
-		}
-		os.Exit(helperExitInternal)
-	case "exit-1", "exit-2":
-		exitCode, _ := strconv.Atoi(strings.TrimPrefix(mode, "exit-"))
-		_, _ = fmt.Fprintf(os.Stderr, "fake analyzer failed with code %d\n", exitCode)
-		os.Exit(exitCode)
-	default:
-		_, _ = fmt.Fprintln(os.Stderr, "unknown fake analyzer mode")
-		os.Exit(helperExitInternal)
-	}
-}
-
-func TestRecommendationsRunsAnalyzerWithStdinSnapshot(t *testing.T) {
-	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	err := runWithFakeAnalyzer(t, "success", bytes.NewBufferString(validSnapshotRequest), stdout, stderr)
+func TestRecommendationsAnalyzesSnapshotFromStdin(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	err := (&RecommendationsCmd{Snapshot: "-"}).Run(&clictx.Context{
+		Stdin:  strings.NewReader(validSnapshotRequest),
+		Stdout: stdout,
+	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if stdout.String() != validAnalyzerOutput {
-		t.Fatalf("stdout = %q, want %q", stdout.String(), validAnalyzerOutput)
+
+	var result analysis.Output
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode output: %v", err)
 	}
-	if stderr.Len() != 0 {
-		t.Fatalf("stderr = %q, want empty", stderr.String())
+	if result.SchemaVersion != analysis.OutputSchemaVersion {
+		t.Fatalf("schemaVersion = %q, want %q", result.SchemaVersion, analysis.OutputSchemaVersion)
+	}
+	if result.DetectorVersion != analysis.ResourceRightSizeDetectorVersion {
+		t.Fatalf("detectorVersion = %q, want %q", result.DetectorVersion, analysis.ResourceRightSizeDetectorVersion)
+	}
+	if result.PolicyVersion == "" {
+		t.Fatal("policyVersion is empty")
+	}
+	if result.Results == nil || len(result.Results) != 0 {
+		t.Fatalf("results = %#v, want an empty array", result.Results)
 	}
 }
 
-func TestRecommendationsPreservesAnalyzerExitCodesAndStderr(t *testing.T) {
-	for _, exitCode := range []int{helperExitInternal, helperExitInvalid} {
-		t.Run(strconv.Itoa(exitCode), func(t *testing.T) {
-			stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-			err := runWithFakeAnalyzer(t, fmt.Sprintf("exit-%d", exitCode), bytes.NewBufferString(validSnapshotRequest), stdout, stderr)
-			var resultError *clierrors.CommandResultError
-			if !errors.As(err, &resultError) || resultError.ExitCode != exitCode {
-				t.Fatalf("Run() error = %#v, want command exit code %d", err, exitCode)
-			}
-			if stdout.Len() != 0 {
-				t.Fatalf("stdout = %q, want empty", stdout.String())
-			}
-			if !strings.Contains(stderr.String(), fmt.Sprintf("failed with code %d", exitCode)) {
-				t.Fatalf("stderr = %q, want analyzer diagnostic", stderr.String())
-			}
-		})
+func TestRecommendationsReadsSnapshotFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snapshot.json")
+	if err := os.WriteFile(path, []byte(validSnapshotRequest), 0o600); err != nil {
+		t.Fatal(err)
 	}
-}
 
-func TestRecommendationsReportsAnalyzerSignalAsOperationalError(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows reports Process.Kill with a numeric exit code")
-	}
-	err := runWithFakeAnalyzer(t, "signal", bytes.NewBufferString(validSnapshotRequest), &bytes.Buffer{}, &bytes.Buffer{})
-	var resultError *clierrors.CommandResultError
-	if errors.As(err, &resultError) {
-		t.Fatalf("Run() returned child exit code %d for a signal", resultError.ExitCode)
-	}
-	if err == nil || !strings.Contains(err.Error(), "terminated") {
-		t.Fatalf("Run() error = %v, want termination error", err)
-	}
-}
-
-func TestRecommendationsReportsShortStdoutWrite(t *testing.T) {
-	err := runWithFakeAnalyzer(t, "success", bytes.NewBufferString(validSnapshotRequest), shortWriter{}, &bytes.Buffer{})
-	if !errors.Is(err, io.ErrShortWrite) {
-		t.Fatalf("Run() error = %v, want %v", err, io.ErrShortWrite)
-	}
-}
-
-func TestRecommendationsRejectsOversizedAnalyzerOutput(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	err := runWithFakeAnalyzer(t, "oversized-output", bytes.NewBufferString(validSnapshotRequest), stdout, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "analyzer response exceeds 67108864-byte limit") {
+	err := (&RecommendationsCmd{Snapshot: path}).Run(&clictx.Context{Stdout: io.Discard})
+	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if stdout.Len() != 0 {
-		t.Fatalf("stdout = %q, want empty", stdout.String())
-	}
 }
 
-func TestRecommendationsPreservesExitCodeWithOversizedAnalyzerOutput(t *testing.T) {
-	stdout := &bytes.Buffer{}
-	err := runWithFakeAnalyzer(t, "oversized-output-exit-2", bytes.NewBufferString(validSnapshotRequest), stdout, &bytes.Buffer{})
-	var resultError *clierrors.CommandResultError
-	if !errors.As(err, &resultError) || resultError.ExitCode != helperExitInvalid {
-		t.Fatalf("Run() error = %#v, want command exit code %d", err, helperExitInvalid)
-	}
-	if stdout.Len() != 0 {
-		t.Fatalf("stdout = %q, want empty", stdout.String())
-	}
-}
-
-func TestRequestValidation(t *testing.T) {
+func TestRecommendationsRejectsInvalidSnapshot(t *testing.T) {
 	tests := []struct {
 		name string
 		data string
 		want string
 	}{
-		{name: "malformed", data: `{`, want: "invalid snapshot request JSON"},
-		{name: "protocol", data: `{"protocolVersion":"kedify-analyzer/v2","input":{"schemaVersion":"resource-analysis-input/v1"}}`, want: `requires "kedify-analyzer/v1"`},
-		{name: "input schema", data: `{"protocolVersion":"kedify-analyzer/v1","input":{"schemaVersion":"resource-analysis-input/v2"}}`, want: `requires "resource-analysis-input/v1"`},
+		{name: "malformed JSON", data: `{`, want: "invalid snapshot request"},
+		{name: "unknown field", data: `{"unknown":true}`, want: "unknown field"},
+		{name: "multiple objects", data: validSnapshotRequest + `{}`, want: "expected one JSON object"},
+		{name: "unsupported schema", data: `{"input":{"schemaVersion":"resource-analysis-input/v2","observedIntervalHours":24},"policy":{}}`, want: "unsupported input schema version"},
+		{name: "invalid interval", data: `{"input":{"schemaVersion":"resource-analysis-input/v1"},"policy":{}}`, want: "observedIntervalHours must be greater than 0"},
 	}
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := validateRequest([]byte(test.data)); err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("validateRequest() error = %v, want substring %q", err, test.want)
+			err := (&RecommendationsCmd{Snapshot: "-"}).Run(&clictx.Context{
+				Stdin:  strings.NewReader(test.data),
+				Stdout: io.Discard,
+			})
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("Run() error = %v, want substring %q", err, test.want)
 			}
 		})
 	}
 }
 
-func TestResponseValidation(t *testing.T) {
-	tests := []struct {
-		name   string
-		mutate func(*responseMetadata)
-		want   string
-	}{
-		{name: "protocol", mutate: func(response *responseMetadata) { response.ProtocolVersion = "kedify-analyzer/v2" }, want: `expected "kedify-analyzer/v1"`},
-		{name: "analyzer version", mutate: func(response *responseMetadata) { response.AnalyzerVersion = "" }, want: "missing analyzerVersion"},
-		{name: "engine", mutate: func(response *responseMetadata) { response.EngineVersion = "2" }, want: `expected "1"`},
-		{name: "input schema", mutate: func(response *responseMetadata) { response.InputSchemaVersion = "resource-analysis-input/v2" }, want: `expected "resource-analysis-input/v1"`},
-		{name: "output schema", mutate: func(response *responseMetadata) { response.OutputSchemaVersion = "resource-analysis-output/v2" }, want: `expected "resource-analysis-output/v1"`},
-		{name: "missing output", mutate: func(response *responseMetadata) { response.Output = nil }, want: "missing output"},
-		{name: "nested output schema", mutate: func(response *responseMetadata) { response.Output.SchemaVersion = "resource-analysis-output/v2" }, want: `expected "resource-analysis-output/v1"`},
-		{name: "detector", mutate: func(response *responseMetadata) { response.Output.DetectorVersion = "2" }, want: `expected "1"`},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			response := validResponseMetadata()
-			test.mutate(&response)
-			data, err := json.Marshal(response)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := validateResponse(data); err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("validateResponse() error = %v, want substring %q", err, test.want)
-			}
-		})
-	}
-
-	if err := validateResponse([]byte(`{`)); err == nil || !strings.Contains(err.Error(), "invalid JSON response") {
-		t.Fatalf("validateResponse() malformed JSON error = %v", err)
-	}
-}
-
-func TestReadSnapshotSupportsFilesAndRejectsOversizedInput(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "snapshot.json")
-	if err := os.WriteFile(path, []byte(validSnapshotRequest), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	got, err := readSnapshot(path, bytes.NewReader(nil))
-	if err != nil {
-		t.Fatalf("readSnapshot() error = %v", err)
-	}
-	if string(got) != validSnapshotRequest {
-		t.Fatalf("readSnapshot() = %q, want request", got)
-	}
-
-	_, err = readSnapshot("-", bytes.NewReader(bytes.Repeat([]byte(" "), maxSnapshotBytes+1)))
+func TestRecommendationsRejectsOversizedSnapshot(t *testing.T) {
+	err := (&RecommendationsCmd{Snapshot: "-"}).Run(&clictx.Context{
+		Stdin:  bytes.NewReader(bytes.Repeat([]byte(" "), maxSnapshotBytes+1)),
+		Stdout: io.Discard,
+	})
 	if err == nil || !strings.Contains(err.Error(), "request exceeds 16777216-byte limit") {
-		t.Fatalf("readSnapshot() oversized error = %v", err)
+		t.Fatalf("Run() error = %v", err)
 	}
 }
 
-func TestDiscoverAnalyzerOrder(t *testing.T) {
-	t.Run("explicit relative file", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Chdir(dir)
-		name := "custom-analyzer"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
-		writeExecutable(t, name)
-		got, err := discoverAnalyzer(name, "", func(string) (string, error) {
-			t.Fatal("PATH discovery must not run for an explicit analyzer")
-			return "", nil
-		})
-		if err != nil {
-			t.Fatalf("discoverAnalyzer() error = %v", err)
-		}
-		want, _ := filepath.Abs(name)
-		if got != want {
-			t.Fatalf("discoverAnalyzer() = %q, want absolute path %q", got, want)
-		}
+func TestRecommendationsReportsOutputFailure(t *testing.T) {
+	want := errors.New("write failed")
+	err := (&RecommendationsCmd{Snapshot: "-"}).Run(&clictx.Context{
+		Stdin:  strings.NewReader(validSnapshotRequest),
+		Stdout: errorWriter{err: want},
 	})
-
-	t.Run("sibling before PATH", func(t *testing.T) {
-		dir := t.TempDir()
-		sibling := filepath.Join(dir, analyzerName())
-		writeExecutable(t, sibling)
-		got, err := discoverAnalyzer("", filepath.Join(dir, "kedify"), func(string) (string, error) {
-			t.Fatal("PATH discovery must not run when a sibling analyzer exists")
-			return "", nil
-		})
-		if err != nil || got != sibling {
-			t.Fatalf("discoverAnalyzer() = %q, %v; want %q", got, err, sibling)
-		}
-	})
-
-	t.Run("PATH fallback", func(t *testing.T) {
-		path := filepath.Join(t.TempDir(), analyzerName())
-		got, err := discoverAnalyzer("", "", func(name string) (string, error) {
-			if name != analyzerName() {
-				t.Fatalf("LookPath(%q), want %q", name, analyzerName())
-			}
-			return path, nil
-		})
-		if err != nil || got != path {
-			t.Fatalf("discoverAnalyzer() = %q, %v; want %q", got, err, path)
-		}
-	})
-
-	t.Run("missing", func(t *testing.T) {
-		_, err := discoverAnalyzer("", "", func(string) (string, error) {
-			return "", errors.New("not found")
-		})
-		if err == nil || !strings.Contains(err.Error(), "install a matching analyzer") || !strings.Contains(err.Error(), "--analyzer") {
-			t.Fatalf("discoverAnalyzer() error = %v", err)
-		}
-	})
-}
-
-func runWithFakeAnalyzer(t *testing.T, mode string, stdin io.Reader, stdout, stderr io.Writer) error {
-	t.Helper()
-	t.Setenv(helperModeEnv, mode)
-	t.Setenv(helperExpectedEnv, validSnapshotRequest)
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return (&RecommendationsCmd{Snapshot: "-", Analyzer: executable}).Run(&clictx.Context{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
-	})
-}
-
-func validResponseMetadata() responseMetadata {
-	return responseMetadata{
-		ProtocolVersion:     analyzerProtocolVersion,
-		AnalyzerVersion:     "test",
-		EngineVersion:       engineVersion,
-		InputSchemaVersion:  inputSchemaVersion,
-		OutputSchemaVersion: outputSchemaVersion,
-		Output: &outputMetadata{
-			SchemaVersion:   outputSchemaVersion,
-			DetectorVersion: engineVersion,
-		},
+	if !errors.Is(err, want) {
+		t.Fatalf("Run() error = %v, want %v", err, want)
 	}
 }
 
-func writeExecutable(t *testing.T, path string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte("test"), 0o700); err != nil {
-		t.Fatal(err)
-	}
+type errorWriter struct {
+	err error
 }
 
-type shortWriter struct{}
-
-func (shortWriter) Write(data []byte) (int, error) {
-	return len(data) / 2, nil
-}
-
-type repeatingReader struct{}
-
-func (repeatingReader) Read(data []byte) (int, error) {
-	for i := range data {
-		data[i] = 'x'
-	}
-	return len(data), nil
+func (w errorWriter) Write([]byte) (int, error) {
+	return 0, w.err
 }

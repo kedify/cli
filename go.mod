@@ -1,6 +1,6 @@
 module github.com/kedify/cli
 
-go 1.26
+go 1.26.5
 
 require (
 	github.com/alecthomas/kong v1.12.1
@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/guptarohit/asciigraph v0.7.3
+	github.com/kedify/recommender v0.0.0-20260907141451-4247f97d42f1
 	github.com/zalando/go-keyring v0.2.8
 	gopkg.in/yaml.v3 v3.0.1
 )
