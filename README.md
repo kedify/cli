@@ -52,7 +52,11 @@ The binary will be available at `./bin/kedify`.
 ### Offline recommendation analysis
 
 The offline command consumes a normalized snapshot and runs the same analysis engine
-used by Kedify services. The request is:
+used by Kedify services. Production analysis requires an active Kedify subscription
+covering recommendations, including offline use. Evaluation and demos follow the
+[engine license](licenses/LicenseRef-Kedify-Commercial-1.0.txt); using live workloads
+or recommendations for operational decisions during a trial requires written trial
+authorization. The request is:
 
 ```json
 {
@@ -331,4 +335,9 @@ KEDIFY_TOKEN="$KEDIFY_TOKEN" ./bin/kedify get cluster my-cluster
 
 ## License
 
-Licensed under the Apache License v2.0. See [LICENSE](LICENSE).
+CLI-owned source is licensed under [Apache 2.0](LICENSE). The bundled
+[Kedify Recommender v0.2.0](https://github.com/kedify/recommender/tree/v0.2.0) engine
+uses the [Kedify Commercial Subscription License 1.0](licenses/LicenseRef-Kedify-Commercial-1.0.txt)
+and [Public Source Addendum 1.0](licenses/LicenseRef-Kedify-Public-Source-1.0.txt).
+See [NOTICE](NOTICE) for component scope; the combined binary is not wholly Apache-licensed.
+Release archives include these texts, and Homebrew installs them under `share/kedify`.

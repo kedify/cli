@@ -32,6 +32,11 @@ archives:
       - goos: windows
         formats:
           - zip
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      - licenses/*.txt
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
@@ -62,6 +67,12 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/kedify/cli"
     description: "Kedify CLI"
+    extra_install: |
+      pkgshare.install "LICENSE", "NOTICE", "licenses"
+    caveats: |
+      The bundled recommendation engine uses Kedify's commercial license.
+      Production analysis requires a subscription covering that feature, including offline use.
+      See #{pkgshare}/NOTICE and #{pkgshare}/licenses for the terms and trial permissions.
 
 changelog:
   use: git

@@ -1,0 +1,25 @@
+Kedify CLI
+Copyright Kedify Inc.
+
+CLI-owned source in this repository is licensed under Apache License 2.0 (LICENSE).
+Dependencies retain their own licenses.
+
+Kedify Recommender
+Module: github.com/kedify/recommender v0.2.0
+Source: https://github.com/kedify/recommender/tree/v0.2.0
+Copyright Kedify Inc.
+
+The recommendation engine linked into the CLI and invoked by
+"kedify analyze recommendations" is supplied under both:
+- licenses/LicenseRef-Kedify-Commercial-1.0.txt
+- licenses/LicenseRef-Kedify-Public-Source-1.0.txt
+
+These Kedify terms cover the engine, not the Apache-licensed CLI source or other
+separately licensed dependencies. The combined binary includes the restricted
+engine and is not licensed as a whole under Apache 2.0. A production entitlement
+must cover recommendations, including offline analysis. Evaluation and demos are
+permitted within the license's scope; live workloads or operational decisions in
+a trial require written authorization. Preserve both full texts with the engine.
+
+Nothing here revokes rights already granted for earlier Apache-licensed versions,
+including Recommender v0.1.0, or other independently applicable licenses.
