@@ -1,6 +1,6 @@
 module github.com/kedify/cli
 
-go 1.26.5
+go 1.26.10
 
 require (
 	github.com/alecthomas/kong v1.12.1
