@@ -30,7 +30,7 @@ jobs:
         run: |
           if ! command -v govulncheck >/dev/null 2>&1; then
             echo "govulncheck not found, installing..."
-            go install golang.org/x/vuln/cmd/govulncheck@v1.4.0
+            go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           fi
 
       - name: Verify dependencies
@@ -51,26 +51,26 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9.2.1
         with:
-          version: v2.12.2
+          version: v2.15.0
           args: --timeout=10m
 
       - name: Run staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
-          version: "v0.7.0"
+          version: "v0.8.2"
           install-go: false
 
       - name: Run vulncheck
         run: |
-          echo -e "### vulncheck\n\n" >> ${GITHUB_STEP_SUMMARY}
-          echo '```' >> ${GITHUB_STEP_SUMMARY}
-          (govulncheck ./... || true) | tee -a ${GITHUB_STEP_SUMMARY}
-          echo '```' >> ${GITHUB_STEP_SUMMARY}
+          echo -e "### vulncheck\n\n" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"
+          (govulncheck ./... || true) | tee -a "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Run Gosec Security Scanner
-        uses: securego/gosec@v2.24.7
-        with:
-          args: '-no-fail -fmt sarif -out results.sarif ./...'
+        run: >-
+          go run github.com/securego/gosec/v2/cmd/gosec@v2.29.1-0.20261021130257-17ad2dd7533f
+          -no-fail -fmt sarif -out results.sarif ./...
 
       - name: Normalize SARIF for GitHub upload
         run: |
